@@ -1,20 +1,48 @@
-## btrfs
+# Btrfs Package Summary
 
-This package provides an API for managing BTRFS quotas using both native system calls (via C bindings in `btrfs_native_api.go`) and CLI-based execution (`btrfs_api.go`). The core functionality revolves around enabling, creating, destroying, limiting, assigning, removing, checking existence, and retrieving IDs of BTRFS quota groups.
+This package provides an API for managing Btrfs quotas, implemented using both command-line tool execution (`btrfsCLI`) and direct kernel interaction via `ioctl` system calls (`btrfsNativeAPI`). The package allows enabling, checking, creating, destroying, limiting, assigning, and removing quotas on Btrfs subvolumes.
 
 **Configuration:**
-*   `BTRFS_PLAYGROUND_PATH`: Environment variable specifying the root path for E2E tests (required by `btrfs_native_api_test.go`, `cliapi_test.go`). Tests skip if not set.
-*   `SUDO_USER`: Environment variable indicating whether the test is running with root privileges (required by `btrfs_native_api_test.go`, `cliapi_test.go`). Tests skip if not set.
 
-**Files:**
-*   `btrfs_api.go`: Implements the API interface using CLI calls to `btrfs`.
-*   `btrfs_api_test.go`: E2E tests for the CLI-based API implementation.
-*   `btrfs_native_api.go`: Implements the API interface using native BTRFS IOCTL system calls (C bindings).
-*   `btrfs_native_api_test.go`: E2E tests for the native API implementation.
-*   `cliapi_test.go`: Tests helper functions used in CLI-based operations.
+*   **Environment Variables:**
+    *   `BTRFS_PLAYGROUND_PATH`: Required for E2E tests, specifies the root path for testing.
+    *   `SUDO_USER`: Indicates root permissions, required for E2E tests.
+*   **Command-Line Arguments:**
+    *   The `btrfsCLI` implementation relies on the `btrfs` command being available in the system's PATH.
+*   **Files:**
+    *   `btrfs_api.go`: Defines the `API` interface.
+    *   `btrfs_api_test.go`: Tests the `API` interface.
+    *   `btrfs_native_api.go`: Implements the `API` interface using `ioctl` system calls.
+    *   `btrfs_native_api_test.go`: Tests the `btrfsNativeAPI` implementation.
+    *   `cliapi_test.go`: Tests the `btrfsCLI` implementation.
 
-**Edge Cases:**
-The `btrfsCLI` implementation relies on the external `btrfs` executable being present in the system's PATH. The native API (`btrfs_native_api.go`) requires root privileges to execute IOCTL commands, enforced by environment variable checks in tests. Tests skip if required env vars are not set or sudo access is missing.
+**Launch Edgecases:**
+
+*   The `btrfsCLI` implementation requires the `btrfs` command-line tool to be installed and in the system's PATH.
+*   The `btrfsNativeAPI` implementation requires root privileges to execute `ioctl` system calls.
+*   E2E tests in `btrfs_native_api_test.go` and `cliapi_test.go` are skipped if the `BTRFS_PLAYGROUND_PATH` and `SUDO_USER` environment variables are not set.
+
+**Package Structure:**
+
+```
+insonmnia/worker/storage/btrfs/
+├── btrfs_api.go
+├── btrfs_api_test.go
+├── btrfs_native_api.go
+├── btrfs_native_api_test.go
+└── cliapi_test.go
+```
 
 **Relations:**
-The `API` interface defines a common contract for both CLI-based and native implementations. The `btrfsCLI` struct wraps the external `btrfs` command, while `btrfsNativeAPI` directly interacts with the kernel via IOCTLs. Tests in `*_test.go` files verify the correctness of these implementations under various conditions.
+
+*   `btrfs_api.go` defines the core `API` interface.
+*   `btrfs_native_api.go` and `btrfsCLI` (in `btrfs_api.go`) both implement this interface.
+*   The test files (`*_test.go`) verify the functionality of both implementations.
+*   The `btrfsNativeAPI` implementation uses C bindings and `ioctl` system calls for direct kernel interaction.
+*   The `btrfsCLI` implementation wraps the `btrfs` command-line tool.
+
+**Unclear Places/Dead Code:**
+
+*   The `testE2EOne` function is referenced in multiple test files but not defined in the provided code snippets.
+*   The `parseQgroupID` function is tested in `btrfs_native_api_test.go` but not defined in the provided code snippets.
+*   The exact implementation details of the `btrfsCLI` and `btrfsNativeAPI` are not fully visible without the complete source code.

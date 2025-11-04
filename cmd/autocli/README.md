@@ -1,20 +1,29 @@
-# Package: `autocli`
+# Autocli
 
-This package serves as the command-line interface entry point for Sonm Core, utilizing the `xcode` utility to execute core operations. It handles errors by printing them to standard output before exiting with a non-zero status code (-1). The `proto/mod.go` file likely contains initialization logic or flag definitions used during execution.
+This package appears to be a command-line interface (CLI) entry point, likely part of a larger system. It initializes and executes a core function (`xcode.Execute`) which handles command-line argument parsing and execution. The `proto` package is imported for side effects, suggesting it registers CLI commands or subcommands.
 
-**File Structure:**
+## Package Structure:
 
-*   `main.go`: Entry point for the command-line application.
-*   `proto/mod.go`: Contains supporting functions, potentially including flag registration or configuration loading.
+```
+cmd/autocli/
+├── main.go
+└── proto/
+    └── mod.go
+```
 
-**Environment Variables / Flags:**
+## Configuration:
 
-The code does not explicitly define environment variables or flags within this snippet. However, `xcode.Execute()` likely handles these through its own mechanisms (command-line arguments, config files). The blank import of the `proto` package suggests that it might register command-line flags during initialization.
+*   **Command-line arguments:** The primary configuration method is through arguments passed to the CLI, which are handled by `xcode.Execute()`. The specific arguments are not defined in this snippet.
+*   **Environment variables:** The code does not explicitly use environment variables, but `xcode.Execute()` might rely on them internally.
+*   **Files:** No file paths are explicitly used for configuration in this snippet.
 
-**Edge Cases:**
+## Launch Edgecases:
 
-The application exits with a non-zero status code (-1) if `xcode.Execute()` returns an error. This indicates potential issues with external configuration or input data, but no specific edge cases are handled within this file itself. The behavior of the program depends entirely on how `xcode.Execute()` handles errors and invalid inputs.
+*   The application launches by executing `main.go`.
+*   If `xcode.Execute()` fails, the program exits with an error code.
+*   The exact behavior depends on the implementation of `xcode.Execute()` and the commands registered in `proto/mod.go`.
 
-**Code Summary:**
+## Relations:
 
-The `main` function calls `xcode.Execute()`, which performs the core application logic. Any errors during execution are printed to standard output, and the program exits with a non-zero status code (-1). The blank import of `github.com/sonm-io/core/cmd/autocli/proto` suggests that it might register command-line flags or perform other initialization tasks before execution.
+*   `main.go` serves as the entry point, delegating execution to `xcode.Execute()`.
+*   `proto/mod.go` likely registers CLI commands or subcommands that `xcode.Execute()` can handle.

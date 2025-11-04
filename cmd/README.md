@@ -1,20 +1,101 @@
-# Sonm Core CLI Package Summary
+# Autocli Package Summary
 
-This document summarizes the functionality and structure of the `cmd` package within the Sonm Core project. The package is responsible for building a command-line interface (CLI) using Cobra, handling configuration loading, version display, signal interruption, and error reporting. It provides utilities for managing flags, executing commands with context, and gracefully shutting down long-running processes.
+This package appears to be a collection of command-line tools and utilities, likely related to a distributed computing or resource management system (possibly Sonm, given the `sonmmon` directory). The code is structured around a Cobra-based CLI framework, with numerous subcommands for various operations.
 
-## Project Package Structure:
+**Configuration:**
 
-*   `cmd/cobra.go`: Core CLI setup, command registration, flag parsing, and execution logic.
-*   `cmd/common.go`: Utility functions for handling signals (SIGINT, SIGTERM) and context cancellation.
+*   **`--config` flag:** Required for most commands, specifies the path to a configuration file. Supports `~` for the user's home directory.
+*   **Environment variables:** Likely used by underlying dependencies, but not explicitly defined in the provided code.
+*   **Configuration files:** The format of these files is not specified, but they likely contain settings for API endpoints, credentials, and other runtime parameters.
 
-## Configuration & Environment Variables:
+**Launch Edgecases:**
 
-The application relies on the `--config` flag to specify a configuration file path. The `~` character in this path is expanded to the user's home directory using `homedir.Expand`. No other environment variables are directly used within these files, but the expansion of `~` depends on the shell's environment setup.
+*   **Missing `--config`:** Most commands will fail if the `--config` flag is not provided.
+*   **Invalid configuration:** Errors in the configuration file will likely cause runtime failures.
+*   **Signal handling:** The `WaitInterrupted` function in `cmd/common.go` allows for graceful shutdown on SIGINT/SIGTERM.
 
-## Launching Edge Cases:
+**Project Structure:**
 
-The CLI can be launched with or without arguments. The `--version` flag will print version information and exit. If the `--config` flag is missing, the application will error out before executing any commands. Signals (SIGINT/SIGTERM) are handled gracefully via `WaitInterrupted`, allowing for clean shutdown.
+```
+cmd/
+├── autocli/
+│   ├── main.go
+│   └── proto/
+│       └── mod.go
+├── cli/
+│   ├── commands/
+│   │   ├── blacklist.go
+│   │   ├── client.go
+│   │   ├── common.go
+│   │   ├── completion.go
+│   │   ├── deals.go
+│   │   ├── err_test.go
+│   │   ├── login.go
+│   │   ├── master.go
+│   │   ├── orders.go
+│   │   ├── printers.go
+│   │   ├── printers_test.go
+│   │   ├── profiles.go
+│   │   ├── tasks.go
+│   │   ├── tokens.go
+│   │   ├── version.go
+│   │   ├── version_test.go
+│   │   ├── worker.go
+│   │   ├── worker_askplans.go
+│   │   ├── worker_benchmarks.go
+│   │   ├── worker_devices.go
+│   │   ├── worker_metrics.go
+│   │   └── worker_tasks.go
+│   ├── config/
+│   │   ├── config.go
+│   │   └── config_test.go
+│   ├── task_config/
+│   │   ├── config.go
+│   │   ├── config_test.go
+│   │   └── load_order.go
+│   ├── main.go
+├── cobra.go
+├── common.go
+├── connor/
+│   └── main.go
+├── dwh/
+│   └── main.go
+├── lsgpu/
+│   └── main.go
+├── node/
+│   └── main.go
+├── optimus/
+│   └── main.go
+├── oracle/
+│   └── main.go
+├── pandora/
+│   ├── ammo.go
+│   ├── ammo_dwh.go
+│   ├── ammo_marketplace.go
+│   ├── common.go
+│   ├── config.go
+│   ├── gun.go
+│   ├── gun_dwh.go
+│   ├── gun_marketplace.go
+│   ├── main.go
+│   ├── provider.go
+│   ├── registry.go
+├── qos/
+│   └── main.go
+├── relay/
+│   └── main.go
+├── rv/
+│   └── main.go
+├── secterm/
+│   └── main.go
+├── sonmmon/
+│   ├── TerminusTTFWindows-4.46.0.ttf
+│   ├── image.png
+│   └── main.go
+└── worker/
+    └── main.go
+```
 
-## Code Relations & Unclear Places:
+**Logic Summary:**
 
-The relationship between these files is straightforward: `cobra.go` sets up the CLI structure and command execution flow, while `common.go` provides a utility function for handling signals during long-running operations. There are no apparent unclear places or dead code within this snippet. The package appears well-structured and focused on its core responsibilities.
+The package provides a CLI with numerous subcommands (e.g., `blacklist`, `client`, `deals`, `orders`, `worker`). The `cobra` module handles command parsing and execution. The `config` and `task_config` modules manage application configuration. The `pandora` directory suggests a separate component with its own internal structure (ammo, gun, provider, registry). The other directories (`connor`, `dwh`, `lsgpu`, `node`, `optimus`, `oracle`, `qos`, `relay`, `rv`, `secterm`, `sonmmon`, `worker`) likely represent independent tools or services integrated into the overall system. The `sonmmon` directory contains static assets (TTF font, image).
