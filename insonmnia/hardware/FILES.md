@@ -1,129 +1,149 @@
 # insonmnia/hardware/hardware.go  
-## Hardware Package Summary  
+## Hardware Package Component Summary  
   
 **Package Name:** `hardware`  
   
 **Imports:**  
   
-*   `errors`: For error handling.  
-*   `fmt`: For formatted I/O.  
-*   `math`: For mathematical functions (Ceil, NaN, Inf).  
-*   `net`: For network-related operations (IP parsing).  
-*   `github.com/cnf/structhash`: For hashing structs.  
-*   `github.com/mohae/deepcopy`: For deep copying data structures.  
-*   `github.com/sonm-io/core/insonmnia/benchmarks`: Custom benchmark definitions.  
-*   `github.com/sonm-io/core/insonmnia/hardware/cpu`: CPU hardware details.  
-*   `github.com/sonm-io/core/insonmnia/hardware/ram`: RAM hardware details.  
-*   `github.com/sonm-io/core/insonmnia/worker/gpu`: GPU worker definitions.  
-*   `github.com/sonm-io/core/proto`: Protocol buffer definitions (e.g., `sonm`).  
-*   `github.com/sonm-io/core/util/netutil`: Network utility functions (IP validation).  
+*   `errors`  
+*   `fmt`  
+*   `math`  
+*   `net`  
+*   `github.com/cnf/structhash`  
+*   `github.com/mohae/deepcopy`  
+*   `github.com/sonm-io/core/insonmnia/benchmarks`  
+*   `github.com/sonm-io/core/insonmnia/hardware/cpu`  
+*   `github.com/sonm-io/core/insonmnia/hardware/ram`  
+*   `github.com/sonm-io/core/insonmnia/worker/gpu`  
+*   `github.com/sonm-io/core/proto` (as `sonm`)  
+*   `github.com/sonm-io/core/util/netutil`  
   
-**External Data Sources:**  
+**External Data/Input Sources:**  
   
 *   CPU device information obtained from `cpu.GetCPUDevice()`.  
 *   RAM device information obtained from `ram.NewRAMDevice()`.  
-*   Network IP addresses for private IP detection (`SetNetworkIncoming`).  
-*   GPU hashes and IDs used in resource allocation (`HashGPU`, `GPUIDs`).  
+*   Network IP addresses provided as strings to `SetNetworkIncoming()`.  
+*   GPU resources (hashes) provided via `sonm.AskPlanGPU` to `GPUIDs()`.  
+*   AskPlanResources provided to `LimitTo()` and `ResourcesToBenchmarkMap()`.  
   
 **TODOs:**  
   
-*   Split `NetworkIn` into IPv4/IPv6 specific fields.  
-*   Refactor the repeated benchmark-related logic to avoid code duplication (mentioned in `LimitTo` and `ResourcesToBenchmarkMap`).  
-*   Update network device usage to use `DataSizeRate`.  
+*   `// TODO: split NetworkIn into IPv4In and IPv6In.` in `SetNetworkIncoming()`.  
+*   `//TODO: Make network device use DataSizeRate` in `AskPlanResources()`.  
+*   `// TODO: find a way to refactor all this shit.` in `LimitTo()`.  
   
-### Core Structures  
+**Code Summaries:**  
   
-**Hardware:** Represents accumulated hardware information, including CPU, GPU, RAM, Network, and Storage.  Uses nested `sonm.*` structs for detailed specifications.  
+### Hardware Struct  
   
-**DeviceMapping:** A simplified structure used for hashing hardware configurations (CPU, GPU, RAM, network flags). Excludes dynamic values like throughput to ensure consistent hashes.  
+The `Hardware` struct aggregates information about the system's CPU, GPU, RAM, network, and storage. It uses nested `sonm` types to represent these components.  
   
-### Key Functions  
+### NewHardware Function  
   
-**NewHardware():** Initializes a `Hardware` struct with default values and retrieves CPU/RAM device information using external functions (`cpu.GetCPUDevice`, `ram.NewRAMDevice`).  
+The `NewHardware()` function initializes a `Hardware` instance, retrieving CPU and RAM device information using external functions (`cpu.GetCPUDevice()`, `ram.NewRAMDevice()`). It pre-allocates maps for benchmarks within CPU, RAM, Network, and Storage.  
   
-**LogicalCPUCount():** (Deprecated) Returns the number of logical CPUs in the system.  
+### LogicalCPUCount Function  
   
-**Hash():** Generates an MD5 hash of the hardware configuration using `structhash`.  
+The `LogicalCPUCount()` function (deprecated) returns the number of logical CPUs.  
   
-**HashGPU():** Calculates hashes for specified GPU indexes, returning a slice of strings or an error if an index is invalid.  
+### Hash Functions  
   
-**GPUIDs():** Maps GPU resources (hashes) to their corresponding IDs within the system. Returns an error if a resource hash cannot be found.  
+The `Hash()` and `HashGPU()` functions generate hash strings representing the hardware configuration. `Hash()` uses a `DeviceMapping` to create a hash of CPU, GPU, RAM, and network information. `HashGPU()` generates hashes for specific GPU indexes.  
   
-**SetNetworkIncoming():** Flags network as incoming if private IPv4 addresses are detected in provided IPs.  
+### GPU ID Retrieval  
   
-**AskPlanResources():** Creates `sonm.AskPlanResources` based on hardware capabilities, including CPU cores, RAM size, storage availability, GPU hashes, and network throughput.  
+The `GPUIDs()` function maps GPU resources (hashes) to GPU IDs, returning a slice of `gpu.GPUID` values.  
   
-**LimitTo():** Restricts the Hardware struct to match passed resources (CPU, Storage, RAM, Network). It applies proportional scaling of benchmarks if necessary. Returns an error if resource constraints are violated or unknown GPU hashes are provided.  
+### Network Configuration  
   
-**ResourcesToBenchmarkMap():** Converts `sonm.AskPlanResources` into a map of benchmark IDs and results. Handles normalization checks for GPU resources before processing.  
+The `SetNetworkIncoming()` function checks if incoming IP addresses are private IPv4 addresses and sets the `NetFlags` accordingly.  
   
-**FullBenchmarks() & ResourcesToBenchmarks():** Convert hardware resources to benchmarks using the internal logic, returning them in different formats (slice vs map).  
+### Resource Reporting  
+  
+The `AskPlanResources()` function creates a `sonm.AskPlanResources` instance, populating it with CPU core counts, RAM size, storage size, GPU hashes, and network flags.  
   
 ### Benchmark Handling  
   
-The package heavily relies on `sonm.Benchmark` structs to represent performance metrics. Functions like `insertBenches`, `insertBench`, and various resource-to-benchmark conversion methods handle benchmark aggregation based on splitting algorithms (`NONE`, `PROPORTIONAL`, `MAX`, `MIN`). These functions ensure benchmarks are correctly scaled or merged when limiting hardware resources.  
+The `SetDevicesFromBenches()` function populates network and storage benchmarks from existing benchmark data. The `insertBenches()` and `insertBench()` functions handle merging benchmarks with different splitting algorithms (NONE, PROPORTIONAL, MAX, MIN).  
+  
+### Benchmark Conversion  
+  
+The `FullBenchmarks()` and `ResourcesToBenchmarks()` functions convert hardware resources to benchmark slices.  
+  
+### Resource Limiting  
+  
+The `LimitTo()` function creates a new `Hardware` instance with limited resources based on provided `AskPlanResources`. It proportionally scales benchmarks for CPU, storage, RAM, and network.  
+  
+### Resource to Benchmark Map  
+  
+The `ResourcesToBenchmarkMap()` function converts hardware resources to a benchmark map.  
+  
+### Device Mapping  
+  
+The `DeviceMapping` struct and its `Hash()` method provide a hashable representation of hardware devices.  
   
 # insonmnia/hardware/hardware_test.go  
-## Hardware Package Summary  
+## Hardware Package Component Summary  
   
 **Package Name:** `hardware`  
   
 **Imports:**  
   
-*   `github.com/sonm-io/core/insonmnia/benchmarks`: Used for benchmark IDs (e.g., `benchmarks.RamSize`).  
-*   `github.com/sonm-io/core/proto`: Contains definitions for core data structures like `Hardware`, `CPUDevice`, `StorageDevice`, `Benchmark`, and related types used throughout the package.  
-*   `github.com/stretchr/testify/assert`: Used for assertions in tests.  
-*   `github.com/stretchr/testify/require`: Used for requiring conditions to be true in tests, panicking if not.  
-*   `testing`: Standard Go testing library.  
+*   `testing`  
+*   `github.com/sonm-io/core/insonmnia/benchmarks`  
+*   `github.com/sonm-io/core/proto` (aliased as `sonm`)  
+*   `github.com/stretchr/testify/assert`  
+*   `github.com/stretchr/testify/require`  
   
-**External Data / Inputs:**  
+**External Data/Input Sources:**  
   
-The package relies on `sonm.AskPlanResources` structures (CPU, RAM) as input for resource limiting and benchmark conversion functions.  It also uses hardcoded values within test cases to simulate hardware configurations (RAM size, CPU cores, storage capacity). The tests depend heavily on the correctness of the underlying `proto` definitions.  
+*   `sonm.AskPlanResources`: Used for limiting hardware resources. Contains CPU, RAM, and other resource specifications.  
+*   `sonm.Benchmark`: Represents benchmark results for different hardware components.  
+*   `sonm.CPUDevice`, `sonm.StorageDevice`, `sonm.GPUDevice`: Structures defining hardware device properties.  
+*   `sonm.DataSize`: Represents size in bytes.  
   
 **TODOs:**  
   
-No explicit TODO comments are present in this code snippet.  
+*   None found in the provided code snippet.  
   
 ---  
   
-### Core Functionality Breakdown:  
+### Hardware Creation and Initialization  
   
-#### Hardware Creation & Initialization (`getTestHardware`)  
+The `getTestHardware` function creates a `Hardware` instance with predefined values for RAM, CPU, Network, Storage, and GPU. It sets available resources and device properties for testing purposes.  
   
-This function creates a new `Hardware` instance and populates it with test values for RAM, CPU, Network, Storage, and GPU resources.  It's used as a setup routine for most tests in the package. The created hardware has predefined available resources (RAM: 1024, CPU: Intel with 2 cores, Network In/Out: 100/200, Storage: 100500 bytes).  
+### Hardware Hashing  
   
-#### Hardware Hashing (`TestHardwareHash`)  
+The `TestHardwareHash` function verifies that the `Hash` method returns a non-empty hash value. It then adds benchmark results to various hardware components (CPU, Network, Storage, RAM, GPU) and asserts that the hash remains consistent after the benchmarks are added. This suggests the hash is based on hardware configuration *and* benchmark data.  
   
-The `Hash()` method is tested to ensure it generates a non-empty hash value for the hardware configuration. The test verifies that modifying benchmarks on different device types (CPU, Network, Storage, RAM, GPU) and then re-hashing produces the same result as the initial hash, indicating consistency in hashing logic.  
+### Resource Limiting  
   
-#### Resource Limiting (`TestHardwareLimitTo`)  
+The `TestHardwareLimitTo` function tests the `LimitTo` method, which restricts hardware resources based on an input `sonm.AskPlanResources`. It sets up CPU benchmarks with different splitting algorithms and then limits the CPU usage to 150% of the total cores. The assertion verifies that the benchmark results are adjusted accordingly.  
   
-The `LimitTo()` method is tested with a CPU resource request of 150% core usage. The test verifies that benchmarks on the CPU are correctly adjusted based on this limit (e.g., if total cores are 2, then 150% would result in a reduced benchmark value).  It checks for correct handling of different splitting algorithms (`MAX`, `MIN`, `NONE`, `PROPORTIONAL`).  
+### Resources to Benchmarks Conversion  
   
-#### Resource Conversion to Benchmarks (`TestHardware_ResourcesToBenchmarks`)  
-  
-This test verifies that the `ResourcesToBenchmarks()` method correctly converts an `AskPlanResources` structure (specifically RAM size) into a corresponding benchmark entry within the hardware's configuration. It checks if the resulting benchmark value matches the requested resource amount. The function uses predefined benchmark ID (`benchmarks.RamSize`).  
-  
----  
-  
-This summary provides a high-level overview of the key functions and tests within the `hardware` package, focusing on its core functionality related to hardware representation, hashing, resource limiting, and conversion between resources and benchmarks.  The code relies heavily on external definitions from the `sonm/proto` package for data structures and types.  
+The `TestHardware_ResourcesToBenchmarks` function tests the `ResourcesToBenchmarks` method, which converts resource requests (e.g., RAM size) into benchmark values. It sets the available RAM and then requests a specific amount of RAM. The assertion confirms that the resulting benchmark value matches the requested RAM size.  
   
 # insonmnia/hardware/marshal.go  
-## Hardware Package Summary  
+## Hardware Package Component Summary  
   
 **Package Name:** `hardware`  
   
 **Imports:**  
   
-*   `github.com/sonm-io/core/proto`: Used for defining the data structures exchanged with other components (specifically, the `DevicesReply` type).  
+*   `github.com/sonm-io/core/proto` (specifically `sonm` package)  
   
-**External Data / Input Sources:**  
+**External Data/Input Sources:**  
   
-The package relies on an instance of a `Hardware` struct which contains fields representing CPU, GPU, RAM, Network and Storage. The values within this struct are assumed to be populated externally before calling the `IntoProto()` method. No direct external input is handled by the code itself; it transforms internal data into a protobuf representation.  
+*   The component relies on the `Hardware` struct (not shown in this snippet, but assumed to exist within the package) which contains fields for CPU, GPU, RAM, Network, and Storage. These fields are the primary input data.  
   
-**TODOs:** None present in provided snippet.  
+**TODOs:**  
   
-### Code Summary: `IntoProto()` Method  
+*   None found in this snippet.  
   
-The primary function, `IntoProto()`, converts an instance of the `Hardware` struct into a `sonm.DevicesReply` protobuf message. It maps the fields (CPU, GPUs, RAM, Network, Storage) from the `Hardware` struct to corresponding fields in the `sonm.DevicesReply` structure. This method serves as an interface for serializing hardware configuration data into a format suitable for communication with other parts of the system.  
+**Code Summary:**  
+  
+### `IntoProto()` Function  
+  
+This function converts the internal `Hardware` struct's data into a `sonm.DevicesReply` protobuf message. It maps the `CPU`, `GPU`, `RAM`, `Network`, and `Storage` fields of the `Hardware` struct to the corresponding fields in the protobuf message. This function is likely used for serializing hardware information for communication with other parts of the system (e.g., for RPC calls or data storage).  
   
