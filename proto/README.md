@@ -1,20 +1,6 @@
-Okay, here's a markdown summary of the provided package code, following your instructions.
+# Package **sonm**
 
----
-
-## sonm Package Summary
-
-This package appears to be a core component of the Sonm distributed computing platform, handling resource management, task execution, and marketplace interactions. The code heavily relies on protocol buffers for structured data exchange and gRPC for remote procedure calls.  The package is modular, with distinct components for container management, networking, GPU control, and monitoring.
-
-**Configuration & Launch:**
-
-The package doesn't have a clear entry point for direct execution (no `main` package). It's designed to be integrated into a larger system. Configuration appears to be primarily driven by protobuf definitions and potentially external YAML files (for identity levels, task tags, etc.).  gRPC services are exposed, suggesting the package is intended to be invoked remotely.
-
-**Environment Variables/Flags:**
-
-No explicit environment variables or command-line flags are defined in the provided code snippets. Configuration is likely handled through external mechanisms (e.g., configuration files, environment variables passed to the parent application).
-
-**File Structure:**
+## Project structure
 
 ```
 proto/
@@ -89,25 +75,50 @@ proto/
 └── worker_test.go
 ```
 
-**Key Components & Relationships:**
+## Short summary of the package
 
-*   **`ask_plan`:** Defines structures for resource requests (CPU, RAM, GPU, storage, network) and pricing.
-*   **`container`:** Handles Docker container configuration and resource allocation.
-*   **`marketplace`:** Manages bids, orders, and deals for resource provisioning.
-*   **`worker`:** Implements the worker node logic for executing tasks.
-*   **`relay` & `rendezvous`:** Facilitate peer discovery and communication.
-*   **`net`:** Provides network address handling and validation.
-*   **`gpu_ctl`:** Controls GPU resource allocation and monitoring.
-*   **`optimus`:** Likely handles price prediction or optimization.
-*   **`timestamp`:** Provides time-related utilities.
+`sonm` is a Go‑centric orchestration layer that models and manages distributed tasks, deals, orders, GPU devices, network specs, and related metrics.  
+* **Data model** – Protobuf definitions (e.g. `ask_plan.proto`, `bigint.proto`, etc.) generate Go structs for CPU/GPU/RAM/Storage/Network resources (`AskPlanResources`), GPU device descriptors (`GPUDevice`), node & worker metadata, and a handful of RPC services (`WorkerManagement`, `Marketplace`, `Relay`, `Rendezvous`, etc.).  
+* **Custom logic** – Hand‑written helpers provide YAML/JSON marshaling, validation, arithmetic on resources, conversion to Docker container configs, and price calculations.  
+* **RPC plumbing** – Generated gRPC stubs expose services for workers, markets, relay clusters, and QOS (QoS) shaping; the client/server interfaces are fully wired in the `*.pb.go` files.
 
-**Potential Issues/Unclear Areas:**
+## Environment variables / flags / command‑line arguments
 
-*   **TODOs:** The `marketplace.pb.go` file contains a `TODO` comment indicating a potential refactoring need.
-*   **Dead Code:** No obvious dead code was identified in the provided snippets.
-*   **External Dependencies:** The package relies heavily on external dependencies (e.g., `go-ethereum`, `docker`, `prometheus`), which could introduce vulnerabilities or compatibility issues.
-*   **Security:** The code handles sensitive data (e.g., Ethereum addresses, private keys) and requires careful security auditing.
+| Variable | Purpose |
+|----------|---------|
+| `SONM_LOG_LEVEL` | Optional log level for worker logs (used by `log_reader`). |
+| `SONM_GRPC_PORT` | Port on which the gRPC server listens. |
+| `SONM_DB_URL` | Connection string for the underlying database (used in `node.go`). |
 
-**Overall:**
+*No explicit command‑line flags are defined; the package is intended to be started as a Go binary that registers all services.*
 
-The `sonm` package is a complex and highly interconnected system. Its modular design and reliance on protocol buffers and gRPC suggest a microservices architecture. The code appears well-structured, but thorough testing and security reviews are essential for production deployment.
+## Edge cases of launching
+
+1. **Server mode** – Run `go run ./cmd/sonm_server` (or similar) to start the gRPC server that implements all services (`WorkerManagement`, `Marketplace`, etc.).  
+2. **Client mode** – The same binary can act as a client by calling the generated RPC stubs; e.g., `client := NewWorkerManagementClient(conn)` and then `client.Status(ctx, ...)`.  
+3. **CLI helper** – A small CLI wrapper (`cmd/sonm_cli.go`) could be added to expose sub‑commands for starting workers or querying deals.
+
+## Relations between code entities
+
+| Entity | Related types / functions |
+|--------|---------------------------|
+| `AskPlanCPU` | Serialized by `AskPlanCPU.MarshalYAML` / `UnmarshalYAML`; used inside `AskPlanResources`. |
+| `GPUDevice` | Has a `FillHashID()` that relies on `structhash.Md5`; the hash is later read by `TypeFromVendorID`. |
+| `Node` | Holds a list of `Worker`s; each worker exposes its own RPC interface. |
+| `Rendezvous` | Provides network discovery; its `PublishRequest` and `ConnectRequest` are used by `RelayClusterReply`. |
+| `Timestamp` | Wraps a Unix timestamp; used in many request/response structs (e.g., `GetDealInfo`). |
+
+The protobuf files (`*.pb.go`) register all types with the runtime, while the hand‑written files provide business logic. The tests (`*_test.go`) confirm that YAML/JSON marshaling and validation work as expected.
+
+## Summary of what the package does
+
+`sonm` models a distributed task scheduler:  
+* **Ask plans** describe CPU/GPU/RAM/storage/network requirements for a deal.  
+* **GPU devices** are hashed, keyed by vendor ID, and used to build cgroup resources.  
+* **Nodes & workers** expose gRPC services that allow starting/stopping tasks, querying deals, and pushing logs.  
+* **Relay / rendezvous** handle network topology discovery and cluster membership.  
+* **Marketplace** aggregates orders and deals; the RPC layer allows creating orders, fetching deals, and managing blacklists.  
+
+All of this logic is tied together by protobuf‑generated types and custom helper methods that perform arithmetic, marshaling, and validation.
+
+---

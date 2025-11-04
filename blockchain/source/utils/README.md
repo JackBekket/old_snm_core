@@ -1,37 +1,72 @@
-## Package: `generate_api` (Solidity Contract Wrapper Generator)
+# main
 
-This package generates Go bindings for Solidity contracts based on their artifacts. It reads JSON artifacts from a specified directory, filters out unwanted contracts (e.g., `IterableMapping`), and uses the `go-ethereum/accounts/abi/bind` package to create Go wrappers. The generated wrappers are written to individual `.go` files in a designated output directory.
+## Overview  
+`blockchain/source/utils/generate_api.go` is a small command‑line tool that scans Truffle‑compiled Solidity artifacts, generates Go bindings for each contract with the `bind.Bind` helper from the Ethereum Go SDK, and writes the resulting wrapper files into an `api/` directory. The generated code lives in the package named **api**, while this utility itself resides in the **main** package.
 
-**Configuration:**
+---
 
-*   `solidityArtifactsPath`: Path to the directory containing Solidity artifact JSON files (default: `./build/contracts/`).
-*   `wrappersPath`: Path to the directory where generated Go wrappers will be written (default: `./api`).
-*   `wrappersPackage`: The Go package name for the generated wrappers (default: `api`).
-
-**Environment Variables/Flags/Cmdline Arguments:**
-
-None explicitly defined in the provided code. Configuration is hardcoded.
-
-**Files and Paths:**
-
-*   `./build/contracts/*.json`: Input Solidity artifact files.
-*   `./api/*.go`: Output Go wrapper files.
-
-**Edge Cases:**
-
-*   If the `./build/contracts/` directory does not exist or contains no valid JSON files, the program will exit with an error.
-*   The `IterableMapping.json` file is explicitly skipped.
-*   File permissions for generated wrappers are set to 0600.
-
-**Project Package Structure:**
+## File structure  
 
 ```
 blockchain/
-└── source/
-    └── utils/
-        └── generate_api.go
+└─ source/
+   └─ utils/
+      └─ generate_api.go
 ```
 
-**Relations Between Code Entities:**
+*Only one file is present; all logic is contained here.*
 
-The `generate_api.go` file contains the main logic for reading Solidity artifacts, generating Go bindings, and writing the output files. The `SolidityArtifact` struct represents the structure of the input JSON files. The `github.com/ethereum/go-ethereum/accounts/abi/bind` package is used to perform the actual binding generation. The `dieSoon` function provides a centralized error handling mechanism.
+---
+
+## Environment / configuration
+
+| Variable | Purpose | Default value |
+|----------|---------|---------------|
+| `solidityArtifactsPath` | Glob pattern for Truffle JSON artifacts | `"./build/contracts/*.json"` |
+| `wrappersPath` | Output directory for generated Go files | `"api"` |
+| `wrappersPackage` | Package name used when calling `bind.Bind` | `"api"` |
+
+These constants can be tweaked to point at a different build folder or change the output package.
+
+---
+
+## How it works
+
+1. **Imports** – pulls in standard packages plus `github.com/ethereum/go-ethereum/accounts/abi/bind`.
+2. **Constants** – define paths and package name.
+3. **`SolidityArtifact` struct** – matches the JSON structure produced by Truffle (`contractName`, `abi`, `bytecode`).  
+4. **Helper `dieSoon(e error, msg string)`** – prints an error message and exits if a step fails.
+5. **`main()`** –  
+   * Uses `filepath.Glob(solidityArtifactsPath)` to find all artifact files.  
+   * Creates the output directory (`os.MkdirAll`).  
+   * Loops over each JSON file:  
+     - Skips `"build/contracts/IterableMapping.json"` (hard‑coded).  
+     - Reads, unmarshals into `SolidityArtifact`.  
+     - Marshals the ABI back to bytes for `bind.Bind`.  
+     - Calls `bind.Bind` with the contract name, ABI, bytecode and package name.  
+     - Writes the resulting Go source to `api/<ContractName>.go`.
+
+After the loop finishes, a set of wrapper files is ready for import elsewhere in the project.
+
+---
+
+## Launch edge‑cases
+
+* **Build** – `go build -o generate_api ./blockchain/source/utils` creates an executable that can be run directly.  
+* **Run** – `go run ./blockchain/source/utils/generate_api.go` will perform the same steps without producing a binary.  
+* **Re‑generation** – Running again will overwrite existing wrapper files; no deduplication logic is present, so manual cleanup may be needed if artifacts change.
+
+---
+
+## Summary of major code parts
+
+| Section | Purpose |
+|---------|---------|
+| Constants | Define artifact glob, output dir & package name. |
+| `SolidityArtifact` struct | Holds contract metadata for JSON unmarshalling. |
+| `dieSoon` helper | Simple error handling wrapper. |
+| `main()` loop | Core logic: discover artifacts → generate Go bindings → write files. |
+
+No TODO comments were found; the code appears complete and self‑contained.
+
+---

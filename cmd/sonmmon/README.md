@@ -1,47 +1,79 @@
-```markdown
-## Package: sonmmon
+# <end_of_output>  
 
-**Summary:**
+## Package Overview  
+**Name:** `cmd/sonmmon` – a lightweight SDL‑based status monitor for the SONM node.  
+The binary reads a YAML config file, connects to an Ethereum node via gRPC, pulls worker metrics, and renders them in a window with a background image.
 
-The `sonmmon` package is a command-line utility designed to monitor the status of a SONM worker node. It connects to a gRPC server to retrieve worker information, displays it in a graphical window using SDL2, and allows the user to switch between the graphical display and the terminal using Alt+F1. The application relies heavily on external configuration files, environment variables, and system commands to determine its behavior.
+---
 
-**Project Package Structure:**
+### 1. Configuration & Environment  
+
+| Variable | Purpose |
+|----------|---------|
+| `SONM_USER` | User name used by `guessHomeViaEnv()` to locate the home directory (`$HOME/.sonm/cli.yaml`). |
+| `$DISPLAY` | If unset, an Xorg server is started automatically in `initGraphics()`. |
+
+**Command‑line / flags**  
+The binary accepts no explicit flags; it relies on environment variables and a default config path.  
+It can be launched as:  
+
+```bash
+$ go run cmd/sonmmon/main.go   # during development
+$ ./cmd/sonmmon                 # after `go build`
+```
+
+---
+
+### 2. File Structure (project package)
 
 ```
-cmd/sonmmon/
-├── TerminusTTFWindows-4.46.0.ttf
-├── image.png
-└── main.go
+cmd/
+└─ sonmmon/
+   ├─ TerminusTTFWindows-4.46.0.ttf      # TTF font for rendering text
+   ├─ image.png                           # background image for the SDL window
+   └─ main.go                              # Go source – the only code file in this package
 ```
 
-**Configuration:**
+---
 
-*   **Environment Variables:**
-    *   `SONM_USER`: Used to determine the user's home directory if not explicitly set.
-*   **Configuration File:**
-    *   `cli.yaml`: Located in the user's home directory (determined by `guessHomeDir`) or `/home/sonm/.sonm/cli.yaml` as a fallback. Contains configuration settings for the gRPC server address and other parameters.
-*   **Keystore:**
-    *   Used for authentication with the gRPC server. The exact location is not explicitly defined in the code but is likely specified in the `cli.yaml` configuration.
-*   **gRPC Server:**
-    *   Connects to `127.0.0.1:15030` by default. This can be overridden via the `cli.yaml` configuration.
+### 3. Core Code Flow  
 
-**Command-Line Arguments/Flags:**
+| Section | Key Functions / Types | What it does |
+|---------|-----------------------|---------------|
+| **Home & Config** | `guessHomeDir`, `guessConfigPath` | Resolve `$HOME/.sonm/cli.yaml`; fallback to env var or process stats if needed. |
+| **Client Setup** | `newClient(ctx, key)` | Builds a TLS‑rotated gRPC client to the local node (`127.0.0.1:15030`). |
+| **Worker Status** | `WorkerStatus`, `NewWorkerStatus()`, `(w *WorkerStatus) update(...)` | Holds metrics (uptime, IPs, income, resource percentages). The `update()` method pulls data from the node and calculates derived values. |
+| **Graphics Init** | `initGraphics(ctx)` | Starts Xorg if `$DISPLAY` empty; loads font, creates SDL window titled “SONM Status”; scales background image to fit desktop mode. |
+| **Main Loop** | `main()` | Sets up logger, config, client, graphics; then repeatedly: <br>• blits background<br>• draws status text (address, master, IP, uptime, income, percentages)<br>• handles keyboard events (alt+F1 to switch TTY, quit on ESC). |
 
-The application does not appear to take any explicit command-line arguments or flags. All configuration is loaded from the `cli.yaml` file and environment variables.
+---
 
-**Edge Cases/Launch Conditions:**
+### 4. Relations & Dependencies  
 
-*   **X Server Requirement:** The application attempts to start an X server if the `DISPLAY` environment variable is not set. This may cause issues on headless systems or if an X server is not available.
-*   **Dependency on External Commands:** The application relies on the `pgrep` command to find the SONM node process. If `pgrep` is not installed or not in the system's PATH, the application may fail.
-*   **Configuration File Errors:** If the `cli.yaml` file is missing or contains invalid configuration, the application may crash or behave unpredictably.
-*   **gRPC Connection Failures:** If the gRPC server is unreachable or authentication fails, the application will not be able to retrieve worker status and will likely exit.
+* `main()` → `guessHomeDir` → `guessConfigPath` → `config.NewConfig(cfgPath)` → `newClient` → `initGraphics`.  
+* The `WorkerStatus.update()` method is called each loop iteration; it uses the gRPC client created in `newClient`.  
+* Rendering functions (`drawText`, `Close`) are defined on a `displayCtl` struct that holds SDL surfaces, window, font, and scaling ratios.  
+* Font file `TerminusTTFWindows-4.46.0.ttf` is loaded by `ttf.OpenFont`; background image `image.png` is loaded by `img.Load`.  
 
-**Code Relations & Unclear Places:**
+---
 
-*   The `guessHomeDir` function attempts to determine the user's home directory using multiple fallback mechanisms. This logic could be simplified or made more robust.
-*   The `initGraphics` function initializes SDL2 and loads the background image. The image path is hardcoded, which may limit flexibility.
-*   The `main` function's loop includes a `TODO` comment suggesting asynchronous signal handling. This indicates potential future improvements to the application's responsiveness.
-*   The `displayCtl` struct manages the SDL2 window and rendering. The code could be refactored to improve readability and maintainability.
+### 5. Edge Cases & Launch Scenarios  
 
-<end_of_output>
-```
+| Scenario | What to watch for |
+|----------|--------------------|
+| **No `$DISPLAY`** | `initGraphics()` starts an Xorg server automatically; otherwise it just uses the existing display. |
+| **Missing config file** | The program logs a fallback path and will error if `$HOME/.sonm/cli.yaml` cannot be read. |
+| **Keyboard interrupt** | Pressing ESC ends the main loop; alt+F1 triggers a TTY switch (handled in event loop). |
+
+---
+
+### 6. Summary  
+
+The `cmd/sonmmon` package is a self‑contained SDL monitor that:  
+* reads config and Ethereum key,  
+* connects to a local node via gRPC,  
+* pulls worker metrics into a `WorkerStatus` struct,  
+* renders them on a window with a background image, and  
+* handles user input for graceful exit.  
+
+All configuration is driven by environment variables (`SONM_USER`, `$DISPLAY`) and the default config path `$HOME/.sonm/cli.yaml`. The only external assets are the TTF font and PNG image located in the same directory as `main.go`.

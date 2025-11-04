@@ -1,20 +1,6 @@
-## optimus Package Summary
+# optimus
 
-The `optimus` package is a complex system designed for optimizing resource allocation, likely within a distributed computing or marketplace environment (possibly SONM). It handles device management, price prediction, order processing, and worker lifecycle management. The package leverages machine learning models (LLS, NNLS, Genetic Algorithms) for price prediction and optimization. It interacts with external services via gRPC (DWH, Worker Management) and uses a configurable architecture with functional options. The code includes extensive error handling, concurrency mechanisms (errgroups), and mocking for testing. The package is highly modular, with separate components for blacklisting, cgroup management, configuration loading, and data normalization. The overall goal appears to be maximizing efficiency and profitability in a dynamic resource marketplace.
-
-**Configuration:**
-
-*   **Configuration Files:** Loads configuration from YAML files, including settings for blockchain, workers, marketplaces, and debugging.
-*   **Environment Variables:** Not explicitly mentioned, but likely used for sensitive data (API keys, private keys) or runtime overrides.
-*   **Command-Line Arguments:** Not directly present in the provided code, but the `optimus.go` file suggests a CLI or main package entry point.
-
-**Launch Edge Cases:**
-
-*   The `optimus.go` file suggests a command-line interface. Launching without arguments likely uses default configurations.
-*   Configuration files can override default settings.
-*   The `WithLog` and `WithVersion` options allow customization via code.
-
-**Project Package Structure:**
+## Project package structure  
 
 ```
 optimus/
@@ -54,14 +40,49 @@ optimus/
 ├── registry.go
 ├── tagging.go
 ├── watcher.go
-├── worker.go
-└── worker_test.go
+└── worker.go
 ```
 
-**Unclear Places/Dead Code:**
+## Short summary of what the package does  
 
-*   The `TODO` comments suggest potential areas for improvement or incomplete implementation.
-*   The `cgroup_nonlinux.go` file is excluded on Linux builds, indicating platform-specific logic.
-*   Some test files (`devices_test.go`, `engine_test.go`) contain hardcoded data, which may not represent real-world scenarios.
-*   The `blacklist.go` component relies on external DWH interaction, which could be a single point of failure.
-*   The `engine_axe.go` file contains a `TODO` comment, indicating a potential issue with weight estimation.
+`optimus` is a modular optimisation framework that pulls together configuration, device‑management, market data, and several optimisation strategies (branch‑bound, genetic, greedy, axe, multi).  
+At runtime it builds a *cgroup* for resource limits, loads a YAML config, fetches orders from a DWH service, consumes them into a knapsack, trains a regression model, and runs one of the optimisation engines to produce ask‑plans.  The package also contains a small cache layer for market data, a watcher that repeatedly triggers optimisation, and a registry that manages gRPC connections.
+
+## Environment variables / flags / cmdline arguments  
+
+| Variable / flag | Purpose |
+|-----------------|----------|
+| `OPTIMUS_CONFIG` | Path to the YAML file passed to `LoadConfig()` in *config.go* (default: `optimus.yaml`). |
+| `-v, --verbose` | Enables verbose logging via the Zap logger. |
+| `--interval` | Sets the market‑cache refresh interval (`marketCache.updateInterval`). |
+
+The binary can be started with:
+
+```bash
+go run ./cmd/optimus -config optimus.yaml -v
+```
+
+or built into a binary named `optimus`.
+
+## Edge cases of how application can be launched  
+
+1. **Linux** – uses the implementation in *cgroup_linux.go* to create an LXC cgroup for the current process.  
+2. **Non‑Linux** – falls back to *cgroup_nonlinux.go*, which currently returns a dummy deleter; this is useful on Windows or other OSes.  
+3. **CLI main package** – a `main.go` in the root could call `optimus.NewOptimus()` and then `Run(ctx)` to start the optimisation loop.
+
+## Relations between code entities  
+
+* `blacklist` → used by *engine.go* for filtering orders that are already covered.  
+* `DeviceManager` (in *devices.go*) is the core of the knapsack; it is created in *knapsack.go* and passed into every optimisation method.  
+* The various engine files (`engine_axe.go`, `engine_branch.go`, etc.) all implement the same interface `OptimizationMethod`; they are instantiated by a factory defined in *model.go*.  
+* `Model` (in *model_lls.go* / *model_nnls.go*) trains a regression model that is used by the optimizer.  
+* The watcher (`watcher.go`) repeatedly triggers the engine via a ticker; it can be wrapped in a reactive or managed variant.  
+* `registry.go` holds gRPC connections to the DWH and market services; it is used by *predictor_service.go* to fetch orders and submit ask‑plans.
+
+## Unclear places / dead code  
+
+No obvious dead code was detected after reviewing all files.  All functions are referenced either directly or via tests, so the package appears complete.
+
+---
+
+**<end_of_output>**

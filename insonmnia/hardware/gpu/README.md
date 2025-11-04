@@ -1,36 +1,45 @@
-## GPU Package Summary
+# gpu package
 
-This package aims to enumerate GPU devices using OpenCL. The core logic resides in `cl.go`, which initializes OpenCL bindings and retrieves GPU devices via `clGetDeviceIDs`. Device information (name, vendor, memory) is extracted using `clGetDeviceInfo` and packaged into `sonm.GPUDevice` structs. Error handling is robust, mapping OpenCL error codes to human-readable strings.
-
-`cl_other.go` contains a stub implementation of `GetGPUDevicesUsingOpenCL` that always returns an error (`ErrUnsupportedPlatform`) when compiled without OpenCL support (indicated by the `// +build !cl` directive). This suggests conditional compilation based on OpenCL availability.
-
-`device.go` defines a custom error `ErrUnsupportedPlatform` and provides a wrapper function `GetGPUDevices` that calls `GetGPUDevicesUsingOpenCL`.
-
-**Configuration:**
-
-*   **Build Flags:** The `// +build !cl` directive in `cl_other.go` controls whether OpenCL support is included during compilation.
-*   **Environment Variables:** None explicitly used, but OpenCL drivers and libraries must be installed on the system.
-*   **Cmdline Arguments:** None.
-
-**Edge Cases:**
-
-*   If OpenCL is not installed or configured correctly, `GetGPUDevicesUsingOpenCL` in `cl.go` may fail, leading to errors.
-*   If compiled without OpenCL support (`// +build !cl`), `GetGPUDevices` will always return `ErrUnsupportedPlatform`.
-*   The code assumes OpenCL is available and properly configured. No fallback mechanisms are implemented if OpenCL fails.
-
-**Project Structure:**
-
+## Project structure
 ```
-insonmnia/
-└── hardware/
-    └── gpu/
-        ├── cl.go
-        ├── cl_other.go
-        └── device.go
+insonmnia/hardware/gpu/
+├── cl.go          (OpenCL implementation – compiled when tag `cl` is set)
+├── cl_other.go    (fallback implementation – compiled when tag `!cl` is set)
+└── device.go      (public API wrapper around the backend call)
 ```
 
-**Relations:**
+## Build tags, flags and command‑line arguments
+| Item | Value |
+|------|-------|
+| **Build tags** | `cl` for the OpenCL implementation; `!cl` for the fallback. |
+| **cgo directives** |  
+```go
+// #cgo darwin LDFLAGS: -framework OpenCL
+// #cgo linux  LDFLAGS:-lOpenCL
+```
+Link against the macOS framework or Linux library automatically. |
+| **Environment variables / constants** | `maxPlatforms = 32`, `maxDeviceCount = 64`, `CL_PLATFORM_NOT_FOUND_KHR = C.cl_int(-1001)` – used for array sizes and error handling. |
+| **Command‑line flags** | Use `-tags=cl` to build the OpenCL version, or omit it (or use `-tags=!cl`) to build the fallback. |
 
-*   `device.go` depends on `cl.go` for actual GPU device enumeration.
-*   `cl_other.go` provides a conditional stub for OpenCL support.
-*   All files rely on the `sonm.GPUDevice` struct from `github.com/sonm-io/core/proto`.
+## Summary of package logic
+* **`device.go`** exposes a single public function  
+  ```go
+  func GetGPUDevices() ([]*sonm.GPUDevice, error)
+  ```  
+  which simply forwards its result from `GetGPUDevicesUsingOpenCL`. It is the entry point for other parts of the project.
+
+* **`cl.go`** implements `GetGPUDevicesUsingOpenCL`.  
+  * Enumerates all OpenCL platforms (`getPlatforms()`), then for each platform calls `platform.getGPUDevices()` to obtain a slice of `clDevice`.  
+  * For every device it pulls name, vendor name, vendor ID and global memory size via helper methods (`deviceName()`, `vendorName()`, etc.) and appends a new `sonm.GPUDevice` (from the local `proto` package) into the result slice.  
+  * Handles errors with `errorToString(err C.cl_int)`.
+
+* **`cl_other.go`** is compiled when the build tag `cl` is not set; it contains a stub for `GetGPUDevicesUsingOpenCL`. It can be replaced later by an alternative backend (e.g., Vulkan, DirectX) or a pure‑Go implementation.
+
+## Edge cases / launch scenarios
+| Scenario | How to invoke |
+|----------|---------------|
+| **Native OpenCL** | Build with `-tags=cl` (`go build -tags=cl ./...`). The resulting binary will use the OpenCL backend. |
+| **Fallback** | Build without the tag or with `-tags=!cl`. The binary will use the stub implementation from `cl_other.go`. |
+| **Cross‑platform** | On macOS, the linker flag `-framework OpenCL` is used; on Linux it links against `libOpenCL.so`. No extra environment variables are required beyond those constants. |
+
+The package therefore provides a thin wrapper around the OpenCL API that enumerates GPU devices and returns them as Go structs.

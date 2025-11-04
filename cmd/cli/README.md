@@ -1,8 +1,27 @@
-## Package: `cli`
+# Package **main**
 
-This package implements a command-line interface (CLI) with various subcommands for interacting with a system, likely related to distributed computing or resource management (based on command names like `deals`, `orders`, `tasks`, `worker`). The CLI handles user authentication (`login`), manages profiles, and interacts with a backend service through API calls. Configuration is likely handled through environment variables or command-line flags, though specific details are not immediately apparent from this summary.
+## Short summary  
+The `cmd/cli/main` package implements a command‑line interface for the *sonm-io/core* application.  
+It defines a root command that aggregates a large set of sub‑commands (blacklist, client, common, completion, deals, err_test, login, master, orders, printers, profiles, tasks, tokens, version, worker and its sub‑tasks).  The package also contains configuration helpers (`config/config.go`, `task_config/config.go`) and test files for both.  
+`main.go` bootstraps the CLI by creating a root command with the current application version, executing it, printing any error that occurs, and exiting with status 1 on failure.
 
-**Project Package Structure:**
+## Environment variables / flags / cmd‑line arguments  
+
+| Variable / Flag | Purpose | Source |
+|------------------|---------|--------|
+| `version.Version` (from `github.com/sonm-io/core/insonmnia/version`) | Provides the current build version to the root command | `config/config.go` |
+| `commands.Root()` | Creates the top‑level CLI command tree | `cmd/cli/main.go` |
+| `root.Execute()` | Runs all sub‑commands, parses arguments and flags | `main.go` |
+
+The package does not expose any explicit environment variables or custom flags in the provided snippet; however, each of the individual command files (e.g. `blacklist.go`, `client.go`, …) likely defines its own options and arguments.
+
+## Edge cases for launching  
+
+* **Normal launch** – `go run cmd/cli/main.go` will build the binary and execute the root command tree.  
+* **Error handling** – if any sub‑command fails, `commands.ShowError(root, err.Error(), nil)` prints a message and the program exits with status 1.  
+* **Configuration files** – The package can be configured via `config/config.go` (general config) or `task_config/config.go` (task‑specific config).  These files are automatically loaded by the command infrastructure when the root command is executed.
+
+## Project package structure  
 
 ```
 cmd/cli/
@@ -33,27 +52,17 @@ cmd/cli/
 │   ├── config.go
 │   └── config_test.go
 ├── main.go
-├── task_config/
-│   ├── config.go
-│   ├── config_test.go
-│   └── load_order.go
+└── task_config/
+    ├── config.go
+    ├── config_test.go
+    └── load_order.go
 ```
 
-**Configuration:**
+## Relations between code entities  
 
-*   **Environment Variables:** The `config/config.go` file likely handles loading configuration from environment variables. Specific variable names are not visible in this summary.
-*   **Command-Line Flags:** The `commands` directory suggests that each subcommand may accept its own set of command-line flags for customization.
-*   **Configuration Files:** The `task_config` directory suggests the existence of configuration files for task-related settings.
+* `main.go` creates the root command and delegates execution to it.  
+* The `commands/` package contains all sub‑command implementations; each file defines a distinct CLI action (e.g., `orders.go` handles order management, `worker_*` files handle worker‑related tasks).  These are registered with the root command via `commands.Root()`.  
+* Configuration is split into two layers: general settings (`config/config.go`) and task‑specific settings (`task_config/config.go`).  The latter can be loaded by any of the worker sub‑commands.  
+* Test files (`*_test.go`) provide unit tests for their corresponding commands, ensuring that each command behaves as expected.
 
-**Edge Cases (Launch):**
-
-*   The CLI can be launched with various subcommands (e.g., `cli login`, `cli orders`, `cli worker`).
-*   Error handling is present in `main.go` to catch and display errors during command execution.
-*   The `completion.go` file suggests support for shell autocompletion, which may require additional setup.
-
-**Relations Between Code Entities:**
-
-*   `main.go` initializes the root command from `commands/` and passes version information from `insonmnia/version`.
-*   The `commands` directory contains individual command implementations that likely interact with a backend service through the `client.go` file.
-*   `config/config.go` and `task_config/config.go` handle loading configuration settings, potentially from environment variables, files, or command-line flags.
-*   The `worker_*` files suggest a worker node component that interacts with the main CLI through API calls.
+The package therefore provides a fully functional CLI with modular commands, configuration support, and test coverage.
