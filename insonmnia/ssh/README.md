@@ -1,35 +1,36 @@
-## SSH Proxy Package Summary
+```markdown
+## Package: ssh
 
-This package implements an SSH proxy server that leverages blockchain-based identity resolution and network tunneling via NPP (Network Proxy Protocol). The proxy authenticates users via SSH agent keys, extracts metadata from usernames (Deal ID and Task ID), resolves remote endpoints using a blockchain market API, and forwards traffic through an NPP tunnel.
+This package implements an SSH proxy server capable of forwarding connections to remote endpoints identified by Deal IDs and Task IDs, leveraging blockchain integration for address resolution. It relies heavily on external dependencies like `gliderlabs/ssh`, `golang.org/x/crypto/ssh`, and a custom NPP (Network Proxy Protocol) implementation.
 
 **Configuration:**
 
-*   **Environment Variables:** `SSH_AUTH_SOCK` (path to SSH agent socket).
-*   **Configuration File:** YAML format with `endpoint` (SSH server address) and `npp` (nested `npp.Config` structure).
-*   **Command-Line Arguments:** None explicitly defined in the provided code.
+*   `Addr`: The network endpoint of the proxy server (required via YAML tag `yaml:"endpoint"`).
+*   `NPP`: A nested `npp.Config` structure controlling traffic handling through the proxy (required via YAML tag `yaml:"npp"`).
 
-**Edge Cases:**
+**Environment Variables:**
 
-*   The server expects a running SSH agent with loaded keys. If no agent is available or the socket is invalid, authentication will fail.
-*   The blockchain market API must be accessible for identity resolution. If the API is unreachable, connections will be rejected.
-*   The NPP dialer must be configured correctly to establish tunnels to remote endpoints.
+*   `SSH_AUTH_SOCK`: Path to the SSH agent socket for key management.  The server connects to this socket to retrieve host signers.
 
-**Project Package Structure:**
+**Command-Line Arguments/Launch Edge Cases:**
 
+The primary launch method involves running the compiled binary with no explicit command-line arguments. Configuration is loaded from external files (e.g., YAML) and environment variables. The SSH agent must be running before launching the server, or authentication will fail.  If relay functionality is enabled (currently disabled), additional configuration may be required for upstream forwarding.
+
+**File Structure:**
+
+*   `config.go`: Defines the `ProxyServerConfig` struct and related configurations.
+*   `crypto.go`: Handles SSH identity creation and verification using ECDSA private keys and Ethereum addresses.  Supports parsing identities in the format "address@signature".
+*   `proxy.go`: Contains the core SSH server implementation, connection handling logic, blockchain integration for address resolution, and NPP-based forwarding.
+
+**Key Logic:**
+
+The package resolves remote endpoints by extracting Deal IDs from user input (e.g., `<DealID>.<TaskID>`). It uses a Blockchain API to map these IDs to Ethereum addresses, then establishes an SSH connection via the configured NPP dialer.  Connections are forwarded between local sessions and remote endpoints using stdin/stdout/stderr multiplexing.
+
+**Potential Issues:**
+
+*   The reliance on external dependencies (SSH agent, blockchain API) introduces potential points of failure.
+*   The disabled relay functionality suggests incomplete or untested features.
+*   Error handling is basic; more robust logging and error propagation may be needed in production environments.
+
+<end_of_output>
 ```
-insonmnia/ssh/
-├── config.go
-├── crypto.go
-└── proxy.go
-```
-
-**Relationships:**
-
-*   `config.go` defines the `ProxyServerConfig` struct, which holds the server's configuration parameters.
-*   `crypto.go` provides functions for creating and verifying SSH identities based on Ethereum addresses and ECDSA signatures.
-*   `proxy.go` implements the core SSH proxy server logic, integrating with SSH agent, blockchain market API, and NPP.
-
-**Unclear Places/Dead Code:**
-
-*   The TODOs in `proxy.go` ("Activate relay, but for now disable for rendezvous testing" and "stdout/stderr intermixing is possible. How to get with it?") suggest incomplete or experimental features.
-*   The reliance on SSH agent keys for authentication introduces a dependency on external key management.
