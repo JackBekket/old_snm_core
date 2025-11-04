@@ -1,36 +1,35 @@
-# Package: `optimus`
+# Package main (cmd/optimus)
 
-**Summary:**
+## Short summary  
+`main.go` is the bootstrap for a command‑line tool that loads an Optimus configuration file, builds a Zap logger, validates the application version and hands control to the core `optimus` logic. It parses command‑line arguments via the `github.com/sonm-io/core/cmd` framework, then executes the main routine.
 
-The `optimus` package appears to be the core logic of a bot or service, likely related to resource management or automation (given the name "Optimus"). It handles configuration loading, version validation, logging setup, and the creation and execution of an `Optimus` bot instance. The package relies heavily on external configuration and command-line arguments for its behavior.
+## Environment variables / flags / cmd‑line arguments  
+| Variable / flag | Description | Default / source |
+|------------------|-------------|-------------------|
+| `app.ConfigPath` | Path to the configuration file that will be parsed by `optimus.LoadConfig`. | Provided by the command framework (`cmd.NewCmd`). |
+| `cfg.Restrictions` | Optional restrictions passed to `optimus.RestrictUsage`. | Loaded from the config file. |
+| `cfg.Logging.LogLevel()` | Logging level used when building the Zap logger. | From the loaded config. |
+| `app.Version` | Version string supplied to the Optimus instance via `optimus.WithVersion`. | Provided by the command framework. |
 
-**Configuration:**
+## File structure  
+```
+cmd/
+└─ optimus/
+   └─ main.go
+```
 
-*   **Config Path:** `app.ConfigPath` (from `cmd.AppContext`) specifies the path to the configuration file.
-*   **Logging Level:** Configured via the `cfg.Logging.LogLevel()` method, likely read from the configuration file.
-*   **App Version:** `app.Version` (from `cmd.AppContext`) is used for version validation.
+## How the application is launched (edge cases)  
 
-**Environment Variables:**
+1. **Direct execution** – `go run ./cmd/optimus/main.go` will invoke `main()` which immediately executes the command created by `cmd.NewCmd(run).Execute()`.  
+2. **Binary build** – `go build -o optimus ./cmd/optimus/main.go` followed by `./optimus --config=... --version=...` will start the same flow, with flags parsed by the `cmd` package.  
+3. **Environment‑driven config** – If an environment variable (e.g., `OPTIMUS_CONFIG`) is defined, it can be read into `app.ConfigPath` before execution.
 
-*   The package itself doesn't directly use environment variables, but the configuration file loaded via `optimus.LoadConfig` may rely on them.
+## Relations between code entities  
 
-**Command-Line Arguments:**
+- `main()` creates a command via `cmd.NewCmd(run)`; the handler function `run` receives a context (`app cmd.AppContext`).  
+- Inside `run`, the configuration file path (`app.ConfigPath`) is used by `optimus.LoadConfig`.  
+- The loaded config (`cfg`) supplies logging level and optional restrictions that are applied with `optimus.RestrictUsage`.  
+- A Zap logger is built, wrapped into a context via `ctxlog.WithLogger`, then validated against the application version.  
+- Finally, an Optimus instance (`bot`) is created with options `WithVersion` and `WithLog`, and its `Run(ctx)` method is called to finish execution.
 
-*   Handled by the `cmd` package and passed to the `run` function via `cmd.AppContext`.
-
-**Files and Structure:**
-
-*   `main.go`: Entry point for the application, initializes the command-line interface, loads configuration, sets up logging, validates the version, and starts the `Optimus` bot.
-
-**Relations:**
-
-*   The `cmd` package provides the command-line interface and argument parsing.
-*   The `optimus` package contains the core logic, including configuration loading, bot creation, and execution.
-*   The `ctxlog` package provides structured logging with context.
-*   The `version` package validates the application version.
-
-**Edge Cases:**
-
-*   If the configuration file specified by `app.ConfigPath` is missing or invalid, the application may crash or behave unpredictably.
-*   If the version validation fails, the application may exit.
-*   If the `Run` method of the `Optimus` bot encounters an error, the application may crash or enter an error state.
+No obvious dead code or missing pieces were detected; all imports are used directly in the flow.

@@ -1,207 +1,117 @@
-Okay, here's a markdown summary of the provided blockchain package code, following your instructions.
+# `blockchain`
 
-# Blockchain Package Summary
+The **`blockchain`** package is a lightweight Go library that wraps an Ethereum‑based side‑/master‑chain node.  
+It exposes a set of high‑level APIs (market, gatekeeper, blacklist, profile registry, etc.) and provides a client capable of reading receipts, sending transactions, and polling logs.  The code is organized around three layers:
 
-This package implements core blockchain interaction logic, likely for a decentralized application (dApp) built on Ethereum or a compatible chain. It provides interfaces and concrete implementations for interacting with smart contracts, managing transactions, and handling events. The package heavily relies on `go-ethereum` for low-level blockchain access.
+1. **Configuration** – `config.go`, `options.go` and the constants in `addresses.go`/`gasLimits.go`.  
+2. **Core logic** – `api.go`, `api_ext.go`, `client.go` and the helper functions in `util.go`.  
+3. **Data types & helpers** – `types.go`, `topics.go`, `unit.go` and the test files.
 
-**Configuration:**
+The package is intended to be used as a library; it can also be built into a CLI via the scripts in `source/scripts/`.
 
-*   **Endpoints:** Masterchain and sidechain endpoints are configurable, with hardcoded defaults (Infura and a SONM sidechain).
-*   **Gas Prices:** Gas prices are configurable, with default values for both chains.
-*   **Contract Registry:** The contract registry address is configurable.
-*   **Batch Size:** The number of blocks processed in batches is configurable.
-*   **YAML Configuration:** The package supports loading configuration from a YAML file.
+---
 
-**Environment Variables/Cmdline Arguments:**
-
-The package doesn't explicitly define environment variables or command-line arguments. Configuration is loaded from YAML or hardcoded defaults.
-
-**Edge Cases (Launch):**
-
-The package is designed to be integrated into a larger application. It doesn't have a standalone launch point. The `client.go` file suggests that the package is intended to be used with a custom Ethereum client implementation.
-
-**Project Package Structure:**
+## File structure
 
 ```
 blockchain/
-├── addresses.go
-├── api.go
-├── api_ext.go
-├── api_ext_test.go
-├── client.go
-├── client_test.go
-├── config.go
-├── gasLimits.go
-├── options.go
-├── source/
-│   ├── .babelrc
-│   ├── .eslint
-│   ├── .eslintignore
-│   ├── .eslintrc
-│   ├── .gitignore
-│   ├── .solcover.js
-│   ├── .soliumignore
-│   ├── .soliumrc.json
-│   ├── Makefile
-│   ├── api/
-│   │   ├── AddressHashMap.go
-│   │   ├── BasicToken.go
-│   │   ├── Blacklist.go
-│   │   ├── DeployList.go
-│   │   ├── DevicesStorage.go
-│   │   ├── ERC20.go
-│   │   ├── ERC20Basic.go
-│   │   ├── Market.go
-│   │   ├── Migrations.go
-│   │   ├── MultiSigWallet.go
-│   │   ├── OracleUSD.go
-│   │   ├── Ownable.go
-│   │   ├── Pausable.go
-│   │   ├── ProfileRegistry.go
-│   │   ├── SNM.go
-│   │   ├── SNMMasterchain.go
-│   │   ├── SafeMath.go
-│   │   ├── SimpleGatekeeperWithLimit.go
-│   │   ├── SimpleGatekeeperWithLimitLive.go
-│   │   ├── StandardToken.go
-│   │   └── TestnetFaucet.go
-│   ├── contracts/
-│   │   ├── AddressHashMap.sol
-│   │   ├── Administratable.sol
-│   │   ├── AutoPayout.sol
-│   │   ├── Blacklist.sol
-│   │   ├── DeployList.sol
-│   │   ├── DevicesStorage.sol
-│   │   ├── Market.sol
-│   │   ├── Migrations.sol
-│   │   ├── MultiSigWallet.sol
-│   │   ├── OracleUSD.sol
-│   │   ├── ProfileRegistry.sol
-│   │   ├── SNM.sol
-│   │   ├── SNMMasterchain.sol
-│   │   ├── SimpleGatekeeperWithLimit.sol
-│   │   ├── SimpleGatekeeperWithLimitLive.sol
-│   │   └── TestnetFaucet.sol
-│   ├── deployed/
-│   │   ├── AddressHashMap.json
-│   │   ├── BasicToken.json
-│   │   ├── Blacklist.json
-│   │   ├── DeployList.json
-│   │   ├── ERC20.json
-│   │   ├── ERC20Basic.json
-│   │   ├── Market.json
-│   │   ├── Migrations.json
-│   │   ├── MultiSigWallet.json
-│   │   ├── OracleUSD.json
-│   │   ├── Ownable.json
-│   │   ├── Pausable.json
-│   │   ├── ProfileRegistry.json
-│   │   ├── SNM.json
-│   │   ├── SNMMasterchain.json
-│   │   ├── SafeMath.json
-│   │   ├── SimpleGatekeeper.json
-│   │   ├── StandardToken.json
-│   │   └── TestnetFaucet.json
-│   ├── migration_artifacts/
-│   │   ├── AddressHashMap.json
-│   │   ├── Administratable.json
-│   │   ├── AutoPayout.json
-│   │   ├── BasicToken.json
-│   │   ├── BasicTokenDeployed.json
-│   │   ├── Blacklist.json
-│   │   ├── DeployList.json
-│   │   ├── DevicesStorage.json
-│   │   ├── Dummy.json
-│   │   ├── ERC20.json
-│   │   ├── ERC20Basic.json
-│   │   ├── ERC20BasicDeployed.json
-│   │   ├── ERC20Deployed.json
-│   │   ├── Market.json
-│   │   ├── Migrations.json
-│   │   ├── MultiSigWallet.json
-│   │   ├── OracleUSD.json
-│   │   ├── Ownable.json
-│   │   ├── Pausable.json
-│   │   ├── ProfileRegistry.json
-│   │   ├── SNM.json
-│   │   ├── SNMMasterchain.json
-│   │   ├── SafeMath.json
-│   │   ├── SimpleGatekeeperWithLimit.json
-│   │   ├── SimpleGatekeeperWithLimitLive.json
-│   │   ├── StandardToken.json
-│   │   └── StandardTokenDeployed.json
-│   ├── migration_utils/
-│   │   ├── address_hashmap.js
-│   │   └── multisig.js
-│   ├── migrations/
-│   │   ├── 1_initial_migration.js
-│   │   ├── 2_deploy_v1.js
-│   │   ├── 3_deploy_devices_storage.js
-│   ├── package-lock.json
-│   ├── package.json
-│   ├── patches/
-│   │   ├── truffle+4.1.14.patch
-│   │   └── truffle-resolver+4.0.4.patch
-│   ├── scripts/
-│   │   ├── dev.sh
-│   │   ├── test.sh
-│   │   └── test_coverage.sh
-│   ├── test/
-│   │   ├── Administratable.js
-│   │   ├── addressHashMap.js
-│   │   ├── autoPayout.js
-│   │   ├── blacklist.js
-│   │   ├── deployers.js
-│   │   ├── devicesStorage.js
-│   │   ├── helpers/
-│   │   │   ├── EVMRevert.js
-│   │   │   ├── EVMThrow.js
-│   │   │   ├── advanceToBlock.js
-│   │   │   ├── ask.js
-│   │   │   ├── common.js
-│   │   │   ├── constants.js
-│   │   │   ├── decodeLogs.js
-│   │   │   ├── ether.js
-│   │   │   ├── expectEvent.js
-│   │   │   ├── expectThrow.js
-│   │   │   ├── hashMessage.js
-│   │   │   ├── increaseTime.js
-│   │   │   ├── latestTime.js
-│   │   │   ├── merkleTree.js
-│   │   │   ├── printers.js
-│   │   │   └── toPromise.js
-│   │   ├── market.js
-│   │   ├── multiSigWallet.js
-│   │   ├── oracleUSD.js
-│   │   ├── profileRegistry.js
-│   │   ├── simpleGatekeeperWithLimit.js
-│   │   ├── simpleGatekeeperWithLimitLive.js
-│   ├── truffle.js
-│   ├── utils/
-│   │   └── generate_api.go
-│   └── topics.go
-├── types.go
-├── types_test.go
-├── unit.go
-└── util.go
+├─ addresses.go
+├─ api.go
+├─ api_ext.go
+├─ api_ext_test.go
+├─ client.go
+├─ client_test.go
+├─ config.go
+├─ gasLimits.go
+├─ options.go
+├─ topics.go
+├─ types.go
+├─ types_test.go
+├─ unit.go
+└─ util.go
 ```
 
-**Relations Between Code Entities:**
+---
 
-*   **`api.go`:** Defines interfaces for interacting with blockchain components (Market, Profile Registry, Blacklist, etc.).
-*   **`api_ext.go`:** Provides a concrete implementation (`niceMarketAPI`) that enhances the `MarketAPI` with profile and blacklist checks.
-*   **`client.go`:** Handles low-level Ethereum client interaction (fetching blocks, receipts, balances).
-*   **`config.go`:** Manages configuration parameters (endpoints, gas prices, contract registry).
-*   **`gasLimits.go`:** Defines gas limits for various operations.
-*   **`source/contracts/*.sol`:** Solidity smart contracts for the dApp's core logic.
-*   **`source/migrations/*.js`:** Truffle migration scripts for deploying contracts.
-*   **`source/test/*.js`:** JavaScript tests for smart contracts.
+## Environment variables / configuration
 
-**Unclear Places/Dead Code:**
+| Variable | Default value (from code) | Purpose |
+|----------|---------------------------|---------|
+| `defaultMasterchainEndpoint` | string URL for master‑chain RPC | used by `WithMasterchainEndpoint` |
+| `defaultSidechainEndpoint` | string URL for side‑chain RPC | used by `WithSidechainEndpoint` |
+| `defaultContractRegistryAddr` | hex address of the contract registry | used by `WithContractRegistry` |
+| `defaultMasterchainGasPrice` | *big.Int* value | gas price for master‑chain transactions |
+| `defaultSidechainGasPrice` | *big.Int* value | gas price for side‑chain transactions |
+| `defaultBlockConfirmations` | int64 | number of confirmations to wait before a block is considered final |
+| `defaultLogParsePeriod` | time.Duration | interval between log‑parsing runs |
+| `defaultMasterchainGasLimit` | uint64 | gas limit for master‑chain blocks |
+| `defaultSidechainGasLimit` | uint64 | gas limit for side‑chain blocks |
+| `defaultBlockBatchSize` | uint64 | number of blocks to batch when fetching data |
 
-*   The `// TODO: Here the market bug, but we need to live with it #1293.` comment in `api_ext.go` indicates a known, unaddressed bug in the market logic.
-*   The `source/patches` directory suggests that the project relies on custom patches for Truffle, which could introduce instability or compatibility issues.
-*   The `source/scripts` directory contains shell scripts for development and testing, but their exact purpose is unclear without further context.
-*   The `source/migration_artifacts` directory contains compiled contract artifacts, which are likely generated during the deployment process.
+These values are read by the functional options in **options.go** and can be overridden via the corresponding `With…` functions.
 
-The package appears to be a complex system for interacting with a blockchain-based dApp, with a focus on market operations, identity management, and security (blacklists, multi-sig). The presence of known bugs and custom patches suggests that the project may be in an unstable or unfinished state.
+---
+
+## Flags / command‑line arguments
+
+The package itself has no explicit CLI flags, but it is built and tested through the helper scripts:
+
+* `source/scripts/dev.sh` – builds the library (via `make`) and runs tests.  
+* `source/scripts/test.sh` – runs unit tests for the API.  
+
+If you want to run a small demo program, add a `main.go` that imports `blockchain`, creates an instance with `NewAPI(...)`, and calls the exposed methods.
+
+---
+
+## Edge cases / launch scenarios
+
+| Scenario | How to start |
+|----------|--------------|
+| **Build & test** | Run `source/scripts/dev.sh`.  This will compile all files, run tests in `api_ext_test.go` and `client_test.go`, and produce a binary in the current directory. |
+| **Run a demo** | Add a `main.go` that imports `blockchain`, creates an API instance with default options (`WithDefaultOptions()`), then call e.g. `api.MarketAPI.OpenDeal(...)`.  The script `source/scripts/test.sh` can be used to run the test suite. |
+| **Deploy contracts** | Use the JSON files in `source/deployed/contracts/…` as deployment artifacts; the client will read them via the registry address defined in `addresses.go`. |
+
+---
+
+## Relations between code entities
+
+* **`addresses.go`** – defines constants that are used by *all* other files to look up contract addresses and keys.  
+* **`config.go`** – holds a `Config` struct that is populated from YAML/JSON via `UnmarshalYAML`; the values are fed into the functional options in **options.go**.  
+* **`client.go`** – implements `CustomEthereumClient`, which is used by all APIs to read receipts and send transactions.  The client is created lazily inside `chainOpts.getClient()`.  
+* **`api.go`** – declares the high‑level interfaces (`ProfileRegistryAPI`, `EventsAPI`, etc.) and a concrete type `BasicAPI` that wires them together.  It also contains the registry logic (`setupContractRegistry`) that reads all contract addresses from the on‑chain hash map.  
+* **`api_ext.go`** – extends the market API with helper methods such as `OpenDeal`.  It uses the other APIs (profile, blacklist) to gather data before calling the underlying market contract.  
+* **`util.go`** – provides low‑level helpers (`extractAddress`, `WaitTxAndExtractLog`) that are used by the APIs for log extraction and receipt handling.  
+* **`topics.go`** – defines all event topic constants; these are referenced in the API code when building filter queries.  
+* **`types.go`** – contains data structures (e.g. `DealOpenedData`, `OrderPlacedData`) that are marshalled/unmarshalled by the APIs.  The helper type `Unit` from **unit.go** supplies common Ethereum denominations used for gas price calculations.
+
+---
+
+## Summary of logic
+
+1. **Configuration**  
+   * `config.go` reads a YAML file into a `Config`.  
+   * Functional options in **options.go** allow overriding defaults (gas prices, endpoints, batch size).  
+
+2. **Client**  
+   * `CustomClient` wraps an `ethclient.Client` and exposes convenience methods (`GetLastBlock`, `GetTransactionReceipt`).  
+
+3. **Registry & APIs**  
+   * `BasicContractRegistry.setup()` reads all contract addresses from the on‑chain hash map using keys defined in **addresses.go**.  
+   * `BasicAPI.NewAPI(...)` creates a full API instance, wiring together market, gatekeeper, blacklist, profile registry, etc.  
+
+4. **Market logic**  
+   * The extended market API (`niceMarketAPI`) orchestrates opening deals by fetching orders, masters, and profiles concurrently (via errgroup) before calling the underlying contract.  
+
+5. **Utilities**  
+   * `util.go` contains helpers for log extraction, receipt polling, and address extraction from logs.  
+
+6. **Testing**  
+   * The test files (`api_ext_test.go`, `client_test.go`, `types_test.go`) verify that the APIs behave correctly and that the client can parse receipts.
+
+---
+
+## Unclear / dead code
+
+No obvious dead code was detected; all functions are referenced by at least one other file or a test.  If you add new options, remember to update **options.go** accordingly.
+
+---

@@ -1,42 +1,132 @@
-## Package: `secterm`
+# secterm
 
-This package implements a command-line tool (`secterm`) for establishing and running a remote PTY (pseudo-terminal) connection. It leverages the `secsh` library for secure shell-like functionality.
+A minimal command‑line tool that reads a YAML configuration, parses an address argument, creates a remote PTY instance and runs it in the background.
 
-**Project Structure:**
+---
+
+## Overview  
+
+* **Purpose** – launch a secure PTY session from the CLI.  
+* **Entry point** – `cmd/secterm/main.go` (package `main`).  
+* **Configuration file** – defaults to `etc/secterm.yaml`; can be overridden with the flag `--config`.  
+* **Runtime arguments** – one positional argument: an address string (`ADDR`) that is parsed into an `auth.Addr`.
+
+---
+
+## Configuration & command‑line
+
+| Source | Key | Default / description |
+|--------|-----|-----------------------|
+| Flag | `--config` | Path to the YAML configuration file (default `"etc/secterm.yaml"`). |
+| Argument | `ADDR` | Target address string passed when invoking the binary. |
+
+The tool can be started as:
+
+```bash
+$ secterm 192.168.1.10:22
+```
+
+or with a custom config path:
+
+```bash
+$ secterm --config=./mycfg.yaml 192.168.1.10:22
+```
+
+---
+
+## Code structure
+
+### Global state  
+
+```go
+var (
+    configPath string
+)
+```
+Holds the configuration file path; set by `init()`.
+
+### init()  
+
+Registers a Cobra flag:
+
+```go
+rootCmd.Flags().StringVarP(&configPath, "config", "c", "etc/secterm.yaml", "Path to the configuration file")
+```
+
+* Flag name: `--config` (short `-c`).  
+* Variable: `configPath`.  
+* Default value: `"etc/secterm.yaml"`.  
+
+### runSecTerm(v string) error  
+
+Core logic:
+
+1. **Parse address** – `addr, err := auth.ParseAddr(v)` converts the CLI argument into an `auth.Addr`.
+2. **Load config** – `cfg, err := secshc.NewRPTYConfig(configPath)` reads the YAML file.
+3. **Create PTY** – `tty, err := secshc.NewRemotePTY(cfg)` builds a remote PTY instance from that configuration.
+4. **Execute session** – `tty.Run(context.Background(), *addr)` starts the PTY in background context.
+
+Errors are wrapped with a message and returned to the caller.
+
+### rootCmd definition  
+
+```go
+var rootCmd = &cobra.Command{
+    Use:   "secterm ADDR",
+    Short: "Secure PTY",
+    Args:  cobra.ExactArgs(1),
+    Run: func(cmd *cobra.Command, args []string) {
+        if err := runSecTerm(args[0]); err != nil {
+            fmt.Printf("ERROR: %v\n\r", err)
+            os.Exit(1)
+        }
+    },
+}
+```
+
+* `Use` – command syntax (`secterm ADDR`).  
+* `Short` – brief description.  
+* `Args` – expects exactly one argument (the address).  
+* `Run` – executes `runSecTerm` with the first argument; on failure prints an error and exits.
+
+### main()  
+
+```go
+func main() {
+    if err := rootCmd.Execute(); err != nil {
+        fmt.Printf("ERROR: %v\n\r", err)
+        os.Exit(1)
+    }
+}
+```
+
+Simply runs the Cobra command tree; on failure prints an error and exits.
+
+---
+
+## Project package structure
 
 ```
-cmd/secterm/
-├── main.go
+cmd/
+└─ secterm/
+   └─ main.go
+etc/
+└─ secterm.yaml
 ```
 
-**Configuration:**
+* `main.go` is the only source file in this package.  
+* The configuration file lives under `etc/`.  
 
-*   **`ADDR` (cmdline argument):** Required. Specifies the target address for the remote PTY connection.
-*   **`--config` (cmdline flag):** Optional. Specifies the path to a YAML configuration file. Defaults to `etc/secterm.yaml`.
+---
 
-**Environment Variables:**
+## Edge cases & launch options  
 
-None explicitly used in the provided code.
+| Scenario | How to invoke |
+|----------|---------------|
+| Default config path | `secterm 192.168.1.10:22` |
+| Custom config path | `secterm --config=./mycfg.yaml 192.168.1.10:22` |
+| Verbose output (future extension) | Add a flag like `--verbose` to control logging level. |
 
-**Edge Cases (Launch):**
+---
 
-*   **Missing `ADDR`:** The program will exit with an error if the target address is not provided as a command-line argument.
-*   **Invalid Configuration File:** If the `--config` flag is used with an invalid path or a malformed YAML file, the program will exit with an error.
-*   **Remote PTY Failure:** If the remote PTY connection fails (e.g., due to network issues or authentication errors), the program will exit with an error.
-
-**Code Logic:**
-
-1.  **CLI Definition:** Uses `cobra` to define the `secterm` command, which takes the target address (`ADDR`) as a required argument and supports the `--config` flag for specifying a configuration file.
-2.  **Configuration Loading:** Loads configuration from the YAML file (if provided) using `secshc.NewRPTYConfig`.
-3.  **Remote PTY Creation:** Creates a remote PTY object using `secshc.NewRemotePTY` based on the loaded configuration.
-4.  **PTY Execution:** Executes the remote PTY using `tty.Run` with the target address.
-5.  **Error Handling:** Includes robust error handling at each step, printing error messages to the console and exiting with a non-zero exit code.
-
-**Dependencies:**
-
-*   `context`
-*   `fmt`
-*   `os`
-*   `github.com/sonm-io/core/insonmnia/auth`
-*   `github.com/sonm-io/core/secsh/secshc`
-*   `github.com/spf13/cobra`
+All parts together provide a minimal CLI tool that reads a configuration file, parses an address argument, constructs a remote PTY session and executes it.
