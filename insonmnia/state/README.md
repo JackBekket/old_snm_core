@@ -1,6 +1,10 @@
-# `state` Package Summary
+Okay, here's a markdown summary of the provided `insonmnia/state` package code, following your instructions.
 
-This package manages persistent application state using a key-value store (libkv/boltdb). It handles loading, saving, and accessing benchmark results, hardware information, and associated hashes. The primary goal is to ensure that valid state exists at all times by creating an empty state if none is found on disk during initialization.
+## Package: `state`
+
+**Summary:**
+
+The `state` package provides a persistent storage layer for application state using `libkv` with `boltdb` as the backend. It serializes state data (benchmarks, hardware info, hash) to JSON and stores it in a key-value store. The package offers methods for loading, saving, and managing this state in a thread-safe manner.
 
 **Project Package Structure:**
 
@@ -12,19 +16,36 @@ insonmnia/
 
 **Configuration:**
 
-*   **Environment Variables / Flags / Cmdline Arguments:** None explicitly defined in the code, but configuration is driven by `StorageConfig`.
-*   **Files & Paths:**
-    *   `StorageConfig`: Defines storage endpoint and bucket name (default: `/var/lib/sonm/worker.boltdb`, "sonm").  The endpoint path determines where the boltdb file will be stored.
+*   **Storage Endpoint:** The path to the `boltdb` file is configurable via the `StorageConfig` struct. The default is `/var/lib/sonm/worker.boltdb`.
+*   **Bucket Name:** The bucket name within the `boltdb` store is configurable via the `StorageConfig` struct. The default is `sonm`.
+*   **Environment Variables/Flags:** No explicit environment variables or command-line flags are defined in the provided code. Configuration is likely handled externally (e.g., YAML file, application startup arguments).
 
-**Edge Cases / Launch Conditions:**
+**Edge Cases (Launch/Usage):**
 
-*   If the configured key-value store is inaccessible or corrupted, the application may fail to load initial state and potentially crash if it relies on this data immediately.
-*   The immediate persistence of an empty state upon initialization ensures that even in a clean environment, there will always be valid (though initially empty) state available.
+*   **Missing `boltdb` File:** If the `boltdb` file specified in `StorageConfig` does not exist, the `loadInitial()` method will create a new empty state and persist it.
+*   **Corrupted `boltdb` File:** If the `boltdb` file is corrupted, the `libkv` library may return errors during load operations. The application should handle these errors gracefully.
+*   **Permissions:** Ensure the application has read/write permissions to the `boltdb` file and its directory.
 
-**Relations Between Entities:**
+**Code Relations & Potential Issues:**
 
-*   `Storage`: The central component managing the key-value store connection and state access.
-*   `KeyedStorage`: A scoped interface for accessing specific keys within `Storage`.
-*   `stateJSON`: Holds the actual application state (benchmarks, hardware info, hash).  This is serialized to JSON for persistence.
+*   **State Serialization:** The `stateJSON` struct is serialized to JSON for storage. Changes to this struct require corresponding updates to the serialization logic.
+*   **Concurrency:** The `sync.Mutex` protects state access, but improper usage could still lead to race conditions.
+*   **Error Handling:** The code lacks explicit error handling in some places (e.g., `dump()` and `loadInitial()`). Errors should be logged or propagated appropriately.
+*   **Hardware Hash:** The purpose of the hardware hash is unclear without additional context. It may be used for identifying hardware configurations or preventing tampering.
+*   **KeyedStorage:** The `KeyedStorage` struct seems redundant. It could be simplified by directly using the `Storage` struct with different keys.
 
-**Unclear Places / Dead Code:** None apparent in this single file summary. The code appears focused and functional.
+**External Dependencies:**
+
+*   `context`
+*   `encoding/json`
+*   `sync`
+*   `github.com/docker/libkv`
+*   `github.com/docker/libkv/store`
+*   `github.com/docker/libkv/store/boltdb`
+*   `github.com/noxiouz/zapctx/ctxlog`
+*   `github.com/sonm-io/core/insonmnia/hardware`
+*   `go.uber.org/zap`
+
+**Dead Code/Unclear Places:**
+
+*   No dead code or unclear places were identified in the provided code snippet.

@@ -1,8 +1,12 @@
-# QOS Package Summary
+Okay, here's a markdown summary of the provided code, formatted as requested.
 
-This package implements a gRPC-based Quality of Service (QOS) server with remote GPU tuning and system initialization capabilities, likely part of the SONM ecosystem. It uses configuration loading from YAML files via `configor` to define endpoint, logging settings, GPU vendor, secure shell configurations, and other parameters. The main functionality revolves around exposing gRPC services for QOS management, GPU tuning, and system initialization through a configured endpoint (Unix socket or network address). A background worker monitors a keystore directory for changes and runs a remote PTY server if enabled in the configuration.
+# Package Summary: `qos` (QoS Server)
 
-**Project Package Structure:**
+**Package Name:** `qos` (inferred from directory structure)
+
+**Purpose:** This package implements a Quality of Service (QoS) server with remote GPU tuning, system initialization, and secure shell (PTY) capabilities. It appears to be part of a larger system (likely related to distributed computing or resource management, given the `sonm-io/core` imports).
+
+**File Structure:**
 
 ```
 cmd/qos/
@@ -11,24 +15,50 @@ cmd/qos/
 
 **Configuration:**
 
-*   **`app.ConfigPath`**: Command-line argument specifying the path to the YAML configuration file (default: `/etc/sonm/qos.yaml`).
-*   **YAML Configuration File (`/etc/sonm/qos.yaml`)**: Defines endpoint, logging settings, GPU vendor, system initialization parameters, secure shell configurations, and other runtime options.
+*   **Configuration File:**  The primary configuration source is a YAML file loaded using `github.com/jinzhu/configor`. The path to this file is specified via the command-line argument `app.ConfigPath`.
+*   **Environment Variables:** No explicit environment variable usage is shown in the provided code snippet.
+*   **Command-Line Arguments:** The `app.ConfigPath` argument is used to specify the configuration file path.
+*   **Configuration Fields:**
+    *   `Endpoint`:  The address the server listens on (Unix socket or network address).
+    *   `GPUVendor`:  The GPU vendor to tune.
+    *   `SecShell.Eth.Keystore`: The directory containing Ethereum keystores for the secure shell server.
 
-**Environment Variables:** None explicitly used in the provided code snippet.
+**Key Components & Logic:**
 
-**Command-Line Arguments:**
+1.  **Configuration Loading:** Loads configuration from YAML using `configor`.
+2.  **Logging:** Initializes structured logging using `go.uber.org/zap` and custom logging configuration.
+3.  **gRPC Server:** Sets up a gRPC server using `github.com/sonm-io/core/util/xgrpc`.
+4.  **Services:** Registers three gRPC services:
+    *   `QOSServer`: Handles QoS-related requests (likely resource allocation, prioritization).
+    *   `RemoteGPUTunerServer`: Provides remote GPU tuning functionality.
+    *   `InitServer`: Handles system initialization tasks.
+5.  **Secure Shell (PTY):** If configured, starts a secure shell server using `github.com/sonm-io/core/secsh`. Monitors a keystore directory for changes.
+6.  **Error Handling:** Uses `golang.org/x/sync/errgroup` for concurrent error handling.
+7.  **Socket Cleanup:** Attempts to delete the Unix socket file before listening (if a socket is used).
 
-*   `--config`: Specifies the path to the YAML configuration file (overrides default).
-*   Other flags from `github.com/sonm-io/core/cmd` may be present but are not detailed here.
+**Edge Cases/Launch Variations:**
 
-**Edge Cases / Launch Scenarios:**
+*   **Unix Socket vs. Network Address:** The `Endpoint` configuration determines whether the server listens on a Unix socket or a network address.
+*   **Secure Shell Enabled/Disabled:** The `SecShell` configuration controls whether the secure shell server is started.
+*   **Configuration File Path:** The `app.ConfigPath` argument must be provided correctly for the server to load its configuration.
 
-1.  **Default Configuration**: If no `--config` flag is provided, it loads `/etc/sonm/qos.yaml`.
-2.  **Custom Configuration**: Using `--config <path>`, the server reads from a specified YAML file.
-3.  **Unix Socket vs Network Address**: The `Endpoint` field in the config determines whether the server listens on a Unix socket or network address (e.g., TCP port).
+**Potential Issues/Unclear Areas:**
 
-**Code Relations:**
+*   The exact purpose of the `QOSServer`, `RemoteGPUTunerServer`, and `InitServer` services is unclear without further context.
+*   The interaction between the secure shell server and the keystore directory monitoring is not fully explained.
+*   The code assumes the existence of certain configuration fields (e.g., `Endpoint`, `GPUVendor`, `SecShell.Eth.Keystore`) without explicit validation.
 
-*   The `main.go` file initializes and runs the gRPC server, loading configuration from YAML using `configor`.
-*   Background workers handle QOS requests, GPU tuning, system initialization, and secure shell monitoring.
-*   Logging is handled via Zap with context-aware logging (`ctxlog`).
+**Dependencies:**
+
+*   `github.com/jinzhu/configor`
+*   `github.com/sonm-io/core/cmd`
+*   `github.com/sonm-io/core/insonmnia/logging`
+*   `github.com/sonm-io/core/insonmnia/sysinit`
+*   `github.com/sonm-io/core/insonmnia/worker/gpu`
+*   `github.com/sonm-io/core/insonmnia/worker/network`
+*   `github.com/sonm-io/core/proto`
+*   `github.com/sonm-io/core/secsh`
+*   `github.com/sonm-io/core/util/xgrpc`
+*   `go.uber.org/zap`
+*   `golang.org/x/sync/errgroup`
+*   `golang.org/x/sys/unix`

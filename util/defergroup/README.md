@@ -1,8 +1,8 @@
 # `defergroup`
 
-This package provides a mechanism for managing deferred function execution with cancellation capabilities. It's designed to mimic the behavior of `defer` statements but allows selective cleanup based on an internal "canceled" flag. The core component is the `DeferGroup` struct, which stores a slice of functions (`fn`) and a boolean flag (`canceled`).
+This package implements a deferred execution group that allows cancellation before execution. It's designed for resource cleanup in functions that might return early due to errors.
 
-## Project Package Structure:
+## Project Structure
 
 ```
 util/
@@ -10,14 +10,18 @@ util/
     mod.go
 ```
 
-### Configuration & Usage:
+## Configuration
 
-The package does not rely on external configuration files or environment variables. It operates entirely in-memory, using the `DeferGroup` struct to manage deferred functions and their execution state. The only configurable aspect is whether cleanup should be skipped via the `canceled` flag.
+The package does not use any environment variables, flags, command-line arguments, or external files for configuration. It operates entirely in-memory.
 
-### Edge Cases/Launch Conditions:
+## Launch Edgecases
 
-This isn't a standalone application; it's a utility package meant to be integrated into other Go programs. There are no command-line arguments or specific launch conditions beyond standard Go program compilation and execution. The effectiveness of this package depends on how the caller uses `Defer()`, `CancelExec()`, and `Exec()` in conjunction with resource allocation/deallocation logic.
+This is a utility package, not a standalone application. It doesn't have launch edgecases.
 
-### Relations Between Code Entities:
+## Logic Summary
 
-The `DeferGroup` struct is central to all operations. Functions are added via `Defer()`. Execution is triggered by `Exec()`, which respects the `canceled` flag. The cancellation mechanism ensures that deferred functions aren't executed if an earlier operation failed, preventing resource leaks or inconsistent state. The reverse iteration order in `Exec()` mimics standard defer semantics for proper cleanup sequencing.
+The `DeferGroup` type stores a slice of functions (`fn`) to be executed in reverse order when `Exec` is called. The `Defer` method adds functions to this slice. The `CancelExec` method sets a `canceled` flag, preventing execution. This is useful for managing resources that need to be cleaned up even if an error occurs before the cleanup phase.
+
+## Relations
+
+The `DeferGroup` type is the central entity. `Defer` adds functions to its internal slice, and `Exec` executes them. `CancelExec` modifies the group's state to prevent execution.

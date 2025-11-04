@@ -1,35 +1,28 @@
-```markdown
-## Package: `metrics` Summary
+## Package: `metrics`
 
-This package provides a Prometheus exporter for application metrics, serving them via an HTTP endpoint at `/metrics`. It uses the `prometheus/client_golang` library to expose metrics and allows customization through functional options.
+This package provides a Prometheus exporter for exposing application metrics. It initializes an HTTP server that serves metrics at the `/metrics` endpoint.
 
-**Imports:**
+**Configuration:**
 
-*   `context`: For managing server lifecycle with context cancellation.
-*   `net`: For creating TCP listeners.
-*   `net/http`: For serving HTTP requests.
-*   `github.com/prometheus/client_golang/prometheus/promhttp`: Prometheus HTTP handler for `/metrics`.
-*   `go.uber.org/zap`: Structured logging library (optional).
-*   `golang.org/x/sync/errgroup`:  For managing concurrent goroutines and error handling.
+*   **`addr` (string):** The TCP address to listen on (required).
+*   **`zap.SugaredLogger`:** Optional logger dependency. If not provided, a no-op logger is used.
 
-**External Data / Input Sources:**
-
-*   `addr` (string): The TCP address to bind the Prometheus exporter server to (e.g., `:9090`). This is a required input when creating `PrometheusExporter`.
-*   Context (`context.Context`): Used for graceful shutdown of the HTTP server.
-
-**Functional Options:**
-
-The package uses functional options pattern via the `Option` type and functions like `WithLogging` to configure the exporter, specifically allowing injection of a custom `zap.SugaredLogger`. If no logger is provided, it defaults to a no-op logger.
-
-**Major Code Parts Summary:**
-
-*   **Options Struct & Functions (`newOptions`, `Option`, `WithLogging`):**  Handles configuration using functional options for dependency injection (logging).
-*   **PrometheusExporter Struct & New Function:** Defines the exporter struct with address and logger, providing a constructor function to create instances.
-*   **Serve Method:** Starts an HTTP server listening on the specified address, serving Prometheus metrics at `/metrics`. It uses `golang.org/x/sync/errgroup` for managing concurrent operations (server serve) and graceful shutdown based on context cancellation.  Logs start and stop events using injected logger.
-*   **newHandler Function:** Creates an HTTP handler that serves the Prometheus metrics endpoint (`/metrics`) via `promhttp.Handler()`.
-
-**TODOs:**
-
-There are no explicit TODO comments in this code snippet.
+**Files:**
 
 ```
+util/
+└── metrics/
+    └── prometheus.go
+```
+
+**Functionality:**
+
+1.  **`NewPrometheusExporter(addr string, opts ...Option)`:** Creates a new Prometheus exporter instance. `addr` is the listening address. `opts` allows customization (e.g., logger).
+2.  **`Serve(ctx context.Context)`:** Starts the HTTP server. It listens on the configured address and serves metrics at `/metrics`. The server runs until the context is cancelled.
+3.  **`newHandler()`:** Creates the HTTP handler for serving Prometheus metrics.
+
+**Relations:**
+
+*   The `PrometheusExporter` struct holds the server and logger.
+*   `Serve` uses `net/http` and `promhttp.Handler()` to handle requests.
+*   `Option` functions allow for dependency injection (e.g., custom logger).

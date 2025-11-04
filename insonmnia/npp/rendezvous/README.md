@@ -1,40 +1,30 @@
-# Rendezvous Package Summary
+## Rendezvous Package Summary
 
-This package implements a bidirectional locator protocol for mutual address resolution between peers, particularly useful in NAT environments. The core functionality revolves around facilitating P2P connections by exchanging public and private network addresses. It provides server-side components for managing meetings (sessions) between clients and servers.
+This package implements a rendezvous protocol for peer-to-peer address resolution, facilitating connections between nodes behind NATs or with uncertain connectivity. It leverages gRPC for communication and supports TLS/QUIC for secure connections. The core logic revolves around matching clients and servers based on a shared identifier, exchanging private and public addresses, and attempting direct connections or relaying if necessary.
 
-**File Structure:**
+**Configuration:**
 
-```
-insonmnia/npp/rendezvous/
-├── client.go
-├── config.go
-├── options.go
-├── peer.go
-└── server.go
-```
+*   **YAML Configuration File:** The primary configuration source, loaded via `github.com/jinzhu/configor`. Defines server settings (address, TLS), Ethereum account details, logging, and debugging options.
+*   **Ethereum Private Key:** Required for TLS/QUIC authentication. Loaded from the YAML config.
+*   **TLS Configuration:** Optional but recommended for secure connections. Defined in the YAML config.
+*   **QUIC Support:** Enabled via functional options (`WithQUIC`), requiring TLS credentials.
+*   **Logging:** Configurable via `zap` logger instance.
 
-**Configuration & Environment Variables:**
+**Files:**
 
-*   `config.go`: Loads configuration from YAML files, including:
-    *   Server address (`Addr`)
-    *   Ethereum private key path (`PrivateKey`) for authentication.  Must be a valid Ethereum key file.
-    *   Logging settings (level, format).
-    *   Debugging options.
-*   `options.go`: Configures TLS credentials via `WithCredentials`. Requires a valid `tls.Config` instance if QUIC is enabled.
+*   `client.go`: Wraps the generated gRPC client, adding a `Close()` method for explicit connection termination.
+*   `config.go`: Handles loading and validating server configuration from YAML.
+*   `options.go`: Implements functional options for configuring the server (logger, credentials, QUIC).
+*   `peer.go`: Defines the `Peer` struct, including a unique `PeerID` generated using UUIDs.
+*   `server.go`: Implements the core rendezvous server logic, handling gRPC connections, address resolution, and meeting management.
 
-**Launch Edge Cases:**
+**Edge Cases:**
 
-*   Server:  Requires a valid configuration file path to load settings. If no TLS config is provided, connections will be unencrypted (discouraged).
-*   Client: No specific launch edge cases beyond standard gRPC client setup.
+*   The server can be launched with or without TLS/QUIC. Disabling TLS is discouraged for production environments.
+*   The server requires a valid Ethereum private key if QUIC is enabled.
+*   The server can be configured to listen on specific TCP addresses.
 
-**Key Components & Logic Flow:**
+**Unclear Places/Dead Code:**
 
-1.  **Peer Identification (`peer.go`):** Assigns unique UUID-based IDs (`PeerID`) to connected peers for tracking, especially when Ethereum addresses are insufficient.
-2.  **Meeting Management (`server.go`):** The `meeting` struct manages sessions between clients and servers using mutexes for thread safety. It facilitates peer discovery by randomly selecting available servers or waiting clients.
-3.  **Address Resolution (`server.go`):** Clients call the `Resolve` RPC to find a matching server, while servers publish their addresses via the `Publish` RPC. If direct connection fails (NAT), TCP punching is attempted but not fully implemented.
-4.  **gRPC Integration (`server.go`):** The server uses gRPC for communication with custom interceptors for logging and authentication. Keep-alive parameters are configured to maintain active connections.
-
-**Potential Issues & Dead Code:**
-
-*   The `TODO` in `server.go` indicates incomplete IPv4/IPv6 compatibility handling during address resolution.
-*   TCP punching is mentioned but not fully implemented, suggesting potential dead code or future work.
+*   The `TODO` in `server.go` regarding IPv6 resolution suggests incomplete handling of dual-stack environments.
+*   The reliance on `xnet.ExternalPublicIPResolver` may introduce external dependencies and potential failure points.

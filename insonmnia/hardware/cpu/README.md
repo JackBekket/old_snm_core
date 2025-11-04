@@ -1,22 +1,38 @@
-# cpu Package Summary
+## CPU Package Summary
 
-This package retrieves and aggregates CPU information from the system using the `gopsutil/cpu` library to populate a `sonm.CPUDevice` struct. It assumes that multi-CPU systems have similar CPUs in each socket, taking the model name of the first detected CPU as representative for all. The total core count is calculated by summing cores across all detected CPUs.
+**Package Name:** `cpu` (based on directory structure)
+
+This package retrieves CPU device information for use within the larger `sonm-io/core` system. It leverages the `gopsutil/cpu` library to gather CPU details from the host system.
 
 **Project Package Structure:**
 
 ```
-insonmnia/hardware/cpu/
-├── device.go
+insonmnia/
+└── hardware/
+    └── cpu/
+        └── device.go
 ```
 
 **Configuration:**
 
-*   No explicit configuration files or environment variables are used. The package relies entirely on the system's CPU information as reported by `gopsutil`.
+*   No explicit configuration files or environment variables are used. The package relies entirely on the host system's CPU information as detected by `gopsutil/cpu`.
 
-**Edge Cases / Launch Conditions:**
+**Command-Line Arguments/Flags:**
 
-The application doesn't have any specific launch conditions, it is a library component that can be called from other parts of the larger project. If no CPUs are detected via `gopsutil`, an error will be returned. The behavior on systems with heterogeneous CPU configurations (different models in different sockets) isn't explicitly handled and may lead to inaccurate reporting.
+*   This package does not expose any command-line interface or flags. It's designed as a library component.
 
-**Relations Between Code Entities:**
+**Edge Cases:**
 
-The `device.go` file contains a single function, `GetCPUDevice`. This function directly interacts with the external dependency `github.com/shirou/gopsutil/cpu` to gather CPU information. The returned data is structured according to the internal `sonm.CPUDevice` struct defined in `github.com/sonm-io/core/proto`.
+*   If `gopsutil/cpu.Info()` fails to detect any CPUs, the `GetCPUDevice()` function returns an error.
+*   The package assumes all CPUs in a multi-CPU system have similar characteristics. If this is not true, the returned `sonm.CPUDevice` may be inaccurate.
+*   The total core count is calculated by summing the cores from all detected CPUs. This may not be the desired behavior in all cases.
+
+**Code Relations:**
+
+*   The `device.go` file contains the core logic for retrieving CPU information.
+*   The `sonm.CPUDevice` struct (defined in `github.com/sonm-io/core/proto`) is used to represent the CPU device information.
+*   The `gopsutil/cpu` package provides the underlying CPU detection functionality.
+
+**Unclear Places/Dead Code:**
+
+*   None apparent. The code is relatively straightforward.

@@ -1,8 +1,10 @@
-# xnet Package Summary
+## xnet Package Summary
 
-The `xnet` package provides utilities for creating network listeners, handling QUIC connections, and resolving external/loopback IP addresses. It supports TCP, UDP, and QUIC protocols with configurable backpressure mechanisms for connection acceptance. The package relies on external services (e.g., AWS checkip endpoint) for public IP resolution and uses caching to optimize performance.
+**Package Name:** `xnet`
 
-## Project Package Structure:
+This package provides utilities for network listening, QUIC connections, and IP address resolution. It focuses on handling backpressure, loopback address management, and external IP retrieval.
+
+**Project Package Structure:**
 
 ```
 util/
@@ -14,14 +16,22 @@ util/
 
 **Configuration:**
 
-*   **`ListenLoopback`, `ListenPacketLoopback`**: Network type (`tcp`, `udp`) and port number (uint16) are required for creating loopback listeners. The external function `LookupLoopbackIP()` is used to obtain loopback IP addresses, which may depend on system configuration.
-*   **`ListenQUIC`**: Requires a TLS configuration (`tls.Config`) and QUIC configuration (`quic.Config`). Default QUIC configurations are provided via the `DefaultQUICConfig` function. The network address (string) is also required for binding the listener.
-*   **`NewExternalPublicIPResolver`**: Allows configuring the HTTP endpoint used to resolve external public IP addresses. Defaults to "http://checkip.amazonaws.com/". Cache refresh duration can be adjusted implicitly through the resolver's internal timer.
+*   **`listener.go`:** No explicit configuration options. Relies on provided network type (tcp, udp) and port number.
+*   **`quic.go`:** Configured via `*tls.Config` and `*quic.Config`. The `DefaultQUICConfig` function provides a pre-configured `quic.Config`.
+*   **`resolve.go`:** The external IP resolver uses `http://checkip.amazonaws.com/` by default, but the URL can be changed. Cache duration is configurable (default: 10 minutes).
 
-**Edge Cases:**
+**Edge Cases (Launch/Usage):**
 
-*   The `ListenLoopback` and `ListenPacketLoopback` functions handle errors during listener creation by closing any partially created listeners before returning an error.
-*   `ListenQUIC` handles peer-gone errors (disconnections) gracefully, skipping them while continuing to accept new connections. Other errors will cause the function to return.
-*   The external IP resolver caches results for a configurable duration; stale IPs may be returned if the cache hasn't been refreshed.
+*   **`listener.go`:** `ListenLoopback` and `ListenPacketLoopback` can fail if no loopback interfaces are available or if the specified port is already in use.
+*   **`quic.go`:** `ListenQUIC` requires a valid TLS configuration. QUIC connections may fail if TLS handshake fails or if the peer disconnects unexpectedly.
+*   **`resolve.go`:** `ExternalPublicIPResolver` depends on the availability of the external HTTP service. If the service is unreachable, the resolver will return an error.
 
-**Unclear Places/Dead Code:** The `LookupLoopbackIP()` function is called in multiple places but not defined within this package, implying it relies on an external dependency or another part of the codebase. This could introduce hidden dependencies and potential failure points. No dead code was found during review.
+**Relationships:**
+
+*   `listener.go` provides basic TCP and UDP listener functionality with backpressure handling.
+*   `quic.go` builds on top of `net` and `crypto/tls` to implement QUIC listeners and connections.
+*   `resolve.go` provides a utility for obtaining the public IP address, which might be used in conjunction with other network operations.
+
+**Unclear/Dead Code:**
+
+No obvious dead code or unclear places were identified in the provided summaries. The code appears to be well-structured and documented.

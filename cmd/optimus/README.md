@@ -1,27 +1,36 @@
-# Optimus CLI Application Summary
+# Package: `optimus`
 
-This package implements a command-line application named "optimus" responsible for running an instance of the `Optimus` bot, configured via external files and command line arguments. The core logic revolves around loading configuration, setting up logging, validating version constraints, initializing the `Optimus` instance, and executing it within a provided context.
+**Summary:**
 
-## Project Package Structure:
+The `optimus` package appears to be the core logic of a bot or service, likely related to resource management or automation (given the name "Optimus"). It handles configuration loading, version validation, logging setup, and the creation and execution of an `Optimus` bot instance. The package relies heavily on external configuration and command-line arguments for its behavior.
 
-```
-cmd/optimus/
-├── main.go
-```
+**Configuration:**
 
-## Configuration & Environment Variables:
+*   **Config Path:** `app.ConfigPath` (from `cmd.AppContext`) specifies the path to the configuration file.
+*   **Logging Level:** Configured via the `cfg.Logging.LogLevel()` method, likely read from the configuration file.
+*   **App Version:** `app.Version` (from `cmd.AppContext`) is used for version validation.
 
-- **Configuration File Path:** Specified via command line arguments handled by the `cmd` package (exact argument name not specified in snippet). The configuration file is loaded using `optimus.LoadConfig`.
-- **Logging Level:** Configured through the `cfg.Logging.LogLevel()` method, likely read from the config file.
-- **Application Version:** Passed via `cmd.AppContext`, presumably set during application startup or build time.
+**Environment Variables:**
 
-## Launch Edge Cases:
+*   The package itself doesn't directly use environment variables, but the configuration file loaded via `optimus.LoadConfig` may rely on them.
 
-The application can be launched with different configuration files specified as command line arguments. The behavior depends on the contents of this file (logging level, usage restrictions). Invalid configurations may lead to errors during loading or initialization. Version validation ensures compatibility constraints are met before execution. 
+**Command-Line Arguments:**
 
-## Code Relations & Unclear Places:
+*   Handled by the `cmd` package and passed to the `run` function via `cmd.AppContext`.
 
-- The `cmd` package handles argument parsing and application context setup.
-- `optimus.LoadConfig` is central for configuration management.
-- `version.ValidateVersion` enforces version restrictions, potentially halting execution if incompatible.
-- The exact structure of the config file (format, required fields) isn't clear from this snippet.
+**Files and Structure:**
+
+*   `main.go`: Entry point for the application, initializes the command-line interface, loads configuration, sets up logging, validates the version, and starts the `Optimus` bot.
+
+**Relations:**
+
+*   The `cmd` package provides the command-line interface and argument parsing.
+*   The `optimus` package contains the core logic, including configuration loading, bot creation, and execution.
+*   The `ctxlog` package provides structured logging with context.
+*   The `version` package validates the application version.
+
+**Edge Cases:**
+
+*   If the configuration file specified by `app.ConfigPath` is missing or invalid, the application may crash or behave unpredictably.
+*   If the version validation fails, the application may exit.
+*   If the `Run` method of the `Optimus` bot encounters an error, the application may crash or enter an error state.
