@@ -1,31 +1,32 @@
 ```markdown
-## Package/Component Summary: `main` (Oracle Service Entrypoint)
+# cmd/oracle:main
 
-**Package Name:** `main`
+## Summary
 
-**Imports:**
-*   `context`: For managing goroutine lifecycles and cancellation.
-*   `fmt`: For formatted I/O, primarily error reporting.
-*   `golang.org/x/sync/errgroup`: For concurrent execution with context-aware error handling.
-*   `github.com/sonm-io/core/cmd`: Custom command framework for application setup and execution.
-*   `github.com/sonm-io/core/insonmnia/logging`: Logging utilities.
-*   `github.com/sonm-io/core/insonmnia/oracle`: Oracle configuration and service logic.
+This package serves as the entry point for the Oracle service within the Sonm Core ecosystem. It initializes configuration, logging, and an oracle instance before launching a concurrent serving loop that runs until interrupted. The application uses `errgroup` to manage goroutines and ensure graceful shutdown in case of errors. Configuration is loaded from a file path specified via command-line arguments or environment variables (see below).
 
-**External Data / Input Sources:**
-*   Configuration file path: Provided via `app.ConfigPath` (presumably from the command framework). This config is parsed by `oracle.NewConfig`.
-*   Command line arguments: Handled through the `cmd` package, though not explicitly visible in this snippet.
+## Environment Variables / Flags
 
-**TODOs:** None found in provided code.
+*   **CONFIG_PATH**: Path to the Oracle configuration file. If not provided, defaults to `/etc/sonm/oracle.yml`.
+*   **LOG_LEVEL**: Logging level (e.g., `debug`, `info`, `warn`, `error`). Defaults to `info`.
+*   **LOG_FORMAT**: Log output format (`text` or `json`). Defaults to `text`.
 
----
+## Files and Paths
 
-### Code Summary Sections:
+*   `main.go`: The main entry point for the Oracle service.
+*   Configuration file: Loaded from the path specified by the `CONFIG_PATH` environment variable or `/etc/sonm/oracle.yml` if not set.
 
-**1. Application Entrypoint (`main`)**: The `main` function initializes and executes a command using the `cmd` framework. This is standard boilerplate for Sonm Core applications, providing a structured way to handle application lifecycle (setup, execution, teardown).
+## Launch Edge Cases
 
-**2. Configuration & Logging Initialization (`run`)**:  The `run` function first loads configuration from a file path provided by the application context (`app.ConfigPath`). It then builds a logger instance based on logging settings within the config. Error handling is present for both operations; failures result in immediate termination with formatted error messages.
+The application can be launched directly using `go run main.go`. Configuration is loaded from the default location unless overridden via command-line arguments or environment variables. The service will exit immediately if configuration loading fails.  If no errors occur, it runs indefinitely until interrupted by a signal (e.g., SIGINT/SIGTERM).
 
-**3. Oracle Instance Creation & Service Execution**: An `oracle.NewOracle` function creates an oracle service instance, passing context and configuration. The core logic involves launching two concurrent goroutines using `errgroup`. One waits for interruption signals (likely SIGINT/SIGTERM), while the other runs the Oracle's main serving loop (`o.Serve(ctx)`).
+## Project Package Structure
 
-**4. Concurrent Execution & Termination Handling**:  The `errgroup` ensures that both goroutines run concurrently, and any error from either will cause the entire process to terminate gracefully after waiting for all running routines. The final return statement indicates successful completion if no errors occurred during execution or shutdown.
 ```
+cmd/oracle/
+├── main.go
+```
+
+## Code Relations and Unclear Places
+
+The code relies heavily on the `github.com/sonm-io/core` internal packages, particularly `insonmnia/logging` and `insonmnia/oracle`. The exact implementation details of these dependencies are not visible in this snippet but are crucial for understanding how configuration is parsed, logging is handled, and the Oracle service operates internally.  The `o.Serve(ctx)` function within the serving loop likely handles incoming requests or performs background tasks related to oracle functionality (e.g., data retrieval, price updates).
