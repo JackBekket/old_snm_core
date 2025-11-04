@@ -1,35 +1,22 @@
-## Package: `ram`
+# RAM Device Package Summary
 
-This package provides a device representation for system RAM, likely intended for use within a larger distributed computing or resource management framework (possibly SONM, given the `sonm.RAMDevice` struct). It retrieves system memory statistics using the `gopsutil/mem` package and exposes them through a custom `sonm.RAMDevice` struct.
+This package provides functionality to retrieve and represent RAM (Random Access Memory) statistics as a `sonm.RAMDevice` struct, likely intended for integration with the broader SONM platform. It leverages the `gopsutil/mem` library to gather real-time memory usage data from the host operating system. The primary function is `NewRAMDevice()`, which encapsulates this process into an easily consumable format.
 
-**Project Package Structure:**
+## Project Package Structure:
 
 ```
-insonmnia/
-└── hardware/
-    └── ram/
-        └── device.go
+insonmnia/hardware/ram/
+├── device.go
 ```
 
-**Configuration:**
+## Configuration & Launch Parameters:
 
-*   No explicit configuration files or environment variables are used. The package relies entirely on the system's reported memory statistics.
+This package does not expose any configuration files, environment variables, command-line arguments, or flags for customization. It operates directly on the host system's memory state without external input beyond standard library and dependency access.
 
-**Command-Line Arguments/Flags:**
+## Edge Cases / Launch Conditions:
 
-*   This package does not appear to be a standalone executable; it's a library intended to be used by other components. Therefore, it has no command-line arguments or flags.
+The application relies entirely on the availability of `gopsutil/mem` and proper OS permissions to read memory statistics. If either is missing, the function will return an error. No specific launch conditions or edge cases are present in this snippet; it's a self-contained utility for retrieving RAM data.
 
-**Edge Cases:**
+## Code Relations & Unclear Areas:
 
-*   The package depends on the accuracy of the `gopsutil/mem` package, which in turn relies on the underlying operating system's memory reporting. Inaccurate or unavailable memory statistics could lead to incorrect device representation.
-*   The `Total` and `Available` fields being set to the same value might be a simplification that doesn't accurately reflect the system's memory state.
-
-**Code Relations:**
-
-*   The `device.go` file contains the core logic for creating a `sonm.RAMDevice` instance.
-*   The `gopsutil/mem` package is used as an external dependency to retrieve system memory statistics.
-*   The `sonm.RAMDevice` struct is likely defined in another part of the `sonm-io/core/proto` package.
-
-**Unclear Places/Dead Code:**
-
-*   The reason for setting `Total` and `Available` to the same value is unclear without further context. It could be a deliberate design choice or a potential bug.
+The code directly maps system-level memory metrics into the `sonm.RAMDevice` struct. The purpose of this structure within the larger SONM ecosystem is not immediately clear from this snippet alone, but it suggests integration with resource management or allocation logic. No dead code or unclear areas are apparent in this isolated function.
