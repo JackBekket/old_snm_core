@@ -1,38 +1,23 @@
-## Package: `connor`
+# connor
 
-**Project Package Structure:**
+This package implements a command-line application that loads configuration, sets up logging, starts a server using `connor`, and exports Prometheus metrics. The main execution flow involves concurrent goroutines for signal handling, server serving, and metric exporting managed by an error group to ensure proper termination. Configuration is loaded from a file path or environment variables via the `connor` package.
+
+**Configuration:**
+- **Config Path:** Specified through command line arguments (not explicitly shown in snippet) or environment variable (`app.ConfigPath`). The application expects a configuration file at this location.
+- **Environment Variables:** Configuration values can be overridden by setting corresponding environment variables.
+- **Metrics Config:** Prometheus metrics are configured via the `cfg.Metrics` section of the loaded config, including port and other settings.
+
+**Files & Structure:**
 
 ```
 cmd/connor/
 ├── main.go
 ```
 
-**Summary:**
+**Relationships:**
 
-The `connor` package represents a command-line application that launches a server, exposes Prometheus metrics, and handles graceful shutdown. It loads configuration from a file, initializes logging, and manages concurrent goroutines using an `errgroup`. The application waits for an interruption signal to terminate.
+The `main.go` file orchestrates all components: configuration loading (`connor.NewConfig`), logging setup (`logging.BuildLogger`, `ctxlog.WithLogger`), server initialization and serving (`server.Serve`), and metrics exporting (`metrics.NewPrometheusExporter`). The `errgroup` ensures that these operations either complete successfully or terminate cleanly if any one fails.
 
-**Configuration:**
-
-*   **Configuration File Path:** Determined by `app.ConfigPath` from `cmd.AppContext`.
-*   **Configuration Structure:** Loaded using `connor.NewConfig`. Contains settings for logging and metrics.
-
-**Environment Variables/Flags/Cmdline Arguments:**
-
-*   None explicitly defined in the provided code snippet. Configuration is loaded from a file.
-
-**Edge Cases (Launch):**
-
-*   The application exits if the configuration file cannot be loaded.
-*   The application exits if the logger cannot be initialized.
-*   The application exits if the Connor server fails to start.
-*   The application exits if the Prometheus metrics exporter fails to start.
-
-**Code Relations:**
-
-*   `main.go` orchestrates the entire application lifecycle.
-*   `connor.NewConfig` loads configuration.
-*   `logging.BuildLogger` initializes logging.
-*   `connor.New` creates the Connor server instance.
-*   `metrics.NewPrometheusExporter` sets up Prometheus metrics.
-*   `cmd.WaitInterrupted` handles graceful shutdown.
-*   `errgroup` manages concurrent goroutines and error handling.
+**Edge Cases:**
+- If the configuration file cannot be loaded, the application exits with a fatal error.
+- Errors during server serving or metric export will cause the entire application to exit due to the use of an `errgroup`.
