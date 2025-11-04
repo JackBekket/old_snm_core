@@ -1,29 +1,29 @@
-## insomniia/structs
+## Package: `structs`
 
-This package defines data structures and utility functions related to image pushing and network specifications within a SONM-based system. It heavily relies on gRPC metadata for validation and configuration.
+This package defines custom structs and functions for handling image pushing tasks and network specifications within the SONM framework. It relies heavily on gRPC metadata and the `sonm-io/core/proto` package.
 
-**Project Structure:**
+**Project Package Structure:**
 
-```
-insonmnia/
-├── structs/
-│   ├── image.go
-│   └── network_spec.go
-```
+*   `insonmnia/structs/image.go`
+*   `insonmnia/structs/network_spec.go`
 
-**Configuration & Environment Variables:**
+**Configuration:**
 
-*   **gRPC Metadata Headers (image.go):** The `deal` and `size` headers in incoming gRPC metadata are critical for the `ImagePush` struct's functionality. Missing or invalid values will cause errors. No environment variables directly configure this behavior, but external services providing these headers must be properly configured.
-*   **External Dependencies (network_spec.go):** The package depends on `github.com/pborman/uuid` for UUID generation and `github.com/sonm-io/core/proto` for the base `NetworkSpec` structure. These dependencies need to be correctly installed and configured in the build environment.
+*   **Environment Variables:** None explicitly used in the provided code.
+*   **Cmdline Arguments:** None.
+*   **Files:** The code relies on gRPC metadata passed through the `sonm.Worker_PushTaskServer` interface. Specifically, the `deal` and `size` headers are required for `ImagePush`.
+*   **Flags:** None.
 
-**Edge Cases & Launch Arguments:**
+**Edge Cases:**
 
-*   The package is a library, not an executable. It's intended to be used within other applications (e.g., gRPC servers).
-*   Invalid or missing gRPC metadata headers will cause errors during `ImagePush` creation. The application using this struct must handle these errors gracefully.
-*   If the `Type` field in a `sonm.NetworkSpec` is empty, `NewNetworkSpec` will return an error.
+*   `NewImagePush` fails if the `deal` or `size` headers are missing from the gRPC metadata.
+*   `RequireHeaderInt64` fails if the `size` header cannot be parsed as an int64.
+*   `NewNetworkSpec` fails if the `GetType()` field of the input `sonm.NetworkSpec` is empty.
+*   `NewNetworkSpecs` fails if any of the individual `NewNetworkSpec` calls fail.
 
-**Code Relations & Unclear Places:**
+**Code Relations:**
 
-*   The `image.go` file focuses on validating gRPC metadata before processing image data. The reliance on specific header names ("deal", "size") makes it tightly coupled to the upstream service definition.
-*   The `network_spec.go` file extends the external `sonm.NetworkSpec` struct by adding a UUID-based `NetID`. The purpose of this ID is unclear without further context, but it likely serves as a unique identifier for network specifications within the system.
-*   The validation function in `network_spec.go` only checks if the `Type` field is empty and does not use the provided ID string. This seems redundant or incomplete.
+*   `ImagePush` is designed to handle image pushing tasks, extracting metadata from gRPC streams.
+*   `NetworkSpec` wraps the core `sonm.NetworkSpec` type, adding a unique identifier (`NetID`).
+*   `validateNetworkSpec` ensures the integrity of the input `sonm.NetworkSpec` before creating a `NetworkSpec` instance.
+*   `NewNetworkSpec` and `NewNetworkSpecs` provide factory functions for creating `NetworkSpec` instances, either individually or in bulk.
