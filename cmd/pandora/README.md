@@ -1,67 +1,90 @@
 # pandora
 
-The **pandora** package implements a lightweight orchestration layer for interacting with a data‑warehouse (DWH) and a marketplace service.  
-It defines two distinct *ammo* types – one that pulls orders from the DWH, another that queries/places orders on the marketplace – together with factories that create these ammo objects from configuration.  
-A **gun** component wraps an aggregator and executes any ammo instance while reporting results via a network sample.  
-The package also provides a global registry for registering ammo‑factory constructors, a provider that pulls ammo from a channel and returns it to the gun, and a bootstrap `main.go` that wires everything together and starts the CLI.
+The `cmd/pandora` directory implements a small, extensible “ammo‑factory” system that powers a command‑line tool.  
+All files declare the same package (`main`) so they form one Go module that can be built and run as a single binary.
 
----
-
-## Environment variables, flags & command‑line arguments
-
-| Variable / Flag | Purpose |
-|-----------------|---------|
-| *None explicitly defined* | The package relies on configuration files read by `importer.Import(fs)` in `cmd/pandora/main.go`.  These files are expected to contain keys such as `"sonm.marketplace.GetOrderInfo"`, `"sonm.DWH.Orders"` and provider details under the key `"detail"`. |
-| CLI arguments | The binary is started via `go run ./cmd/pandora` (or built with `go build`).  The CLI itself is provided by the imported package `github.com/yandex/pandora/cli`; it consumes the registered guns, ammo factories and provider. |
-
----
-
-## Project file structure
-
+## Project structure
 ```
 cmd/pandora/
-├── ammo.go
-├── ammo_dwh.go
-├── ammo_marketplace.go
-├── common.go
-├── config.go
-├── gun.go
-├── gun_dwh.go
-├── gun_marketplace.go
-├── main.go
-├── provider.go
-└── registry.go
+├─ ammo.go
+├─ ammo_dwh.go
+├─ ammo_marketplace.go
+├─ common.go
+├─ config.go
+├─ gun.go
+├─ gun_dwh.go
+├─ gun_marketplace.go
+├─ main.go
+├─ provider.go
+└─ registry.go
 ```
 
----
+## Environment variables, flags and command‑line arguments
 
-## Relations between code entities
+| Variable / Flag | Purpose |
+|------------------|---------|
+| `LOG_LEVEL` (via `LoggingConfig.Level`) | Sets the verbosity of the Zap logger. |
+| `ETH_ENDPOINT` (`EthereumConfig.Endpoint`) | RPC endpoint for Ethereum nodes. |
+| `REGISTRY_ADDR` (`EthereumConfig.Registry`) | Address of the marketplace contract. |
+| `DWH_ENDPOINT` (`DWHExtConfig.DWHEndpoint`) | gRPC endpoint for the data‑warehouse client. |
 
-| Entity | Role | Connected components |
-|--------|------|---------------------|
-| `AmmoType` (ammo.go) | Identifier for ammo objects | Used by all factories and the provider’s pool array |
-| `Ammo`, `AmmoFactory`, `PoolAmmoFactory` | Core abstraction for creating & pooling ammo | Implemented in `ammo_dwh.go`/`ammo_marketplace.go`; used by `provider.go` |
-| `DWHOrdersAmmo`, `OrderInfoAmmo`, `OrderPlaceAmmo` | Concrete ammo types | Created by their respective factories (`dwhOrdersAmmoFactory`, `orderInfoAmmoFactory`, `orderPlaceAmmoFactory`) |
-| `gun` (gun.go) | Executes an ammo and reports a network sample | Bound to an aggregator via `Bind`; used by the CLI after registration in `main.go` |
-| `dwhExt`, `marketplaceExt` | Runtime state for DWH and marketplace guns | Created in `gun_dwh.go`/`gun_marketplace.go` and passed into `newGun` |
-| `provider` (provider.go) | Pulls ammo from a channel, pools it, and hands it to the gun | Uses the global registry (`AmmoRegistry`) to obtain factories; its `Run` method feeds ammo into the channel |
-| `AmmoRegistry` (registry.go) | Global map of factory constructors keyed by string | Populated in `main.go` with calls such as `AmmoRegistry.Register("sonm.DWH.Orders", newDWHOrdersAmmoFactory)` |
+The binary is invoked as a normal Go program; no explicit command‑line flags are parsed in this module, but the `cli.Run()` call in `main.go` starts the whole workflow.
 
----
+## How the application can be launched
 
-## Edge cases for launching
-
-* **CLI entry point** – The binary is started via the `cli.Run()` call in `cmd/pandora/main.go`.  It expects that all ammo factories and guns have been registered beforehand.
-* **Configuration loading** – The importer reads configuration files from the OS filesystem; if any required key (e.g. `"detail"`) is missing, the provider will return an error during construction.
-* **Provider limits** – `Config.AmmoLimit` controls how many ammo objects are produced; if set too low, some guns may not receive enough work.
-
----
+1. **Build** – `go build ./cmd/pandora`.  
+2. **Run** – execute the resulting binary (`./pandora`).  
+   The program will:
+   * Load configuration via `importer.Import(fs)`.
+   * Register ammo factories for marketplace order‑info, order‑placement and DWH orders.
+   * Register two guns (`sonm.marketplace`, `sonm.DWH`) that consume those factories.
+   * Register a provider named `sonm` that supplies the gun with pre‑allocated ammo objects.
+   * Finally call `cli.Run()` which triggers all registered components.
 
 ## Summary of package logic
 
-1. **Factories** create ammo objects for DWH orders and marketplace operations, each backed by a `sync.Pool`.  
-2. **Provider** pulls these ammo objects from its channel, pools them by type, and hands them to the gun.  
-3. **Gun** executes any ammo instance, logs success/failure, and reports a network sample via an aggregator.  
-4. **Main bootstrap** registers all factories and guns in global registries, builds a provider with configuration, and starts the CLI.
+### 1. Core types and interfaces (`ammo.go`)
+* Defines an `AmmoType` identifier, an `Ammo` interface (extends `core.Ammo`) and a factory interface `AmmoFactory`.  
+* Implements a simple pool‑based factory (`PoolAmmoFactory`) that wraps a `sync.Pool`.
 
-This structure allows adding new ammo types or guns simply by registering another factory and gun in `main.go`.
+### 2. DWH order ammo (`ammo_dwh.go`)
+* Provides the concrete `DWHOrdersAmmo` struct, its `Execute` method (fetches orders from a data‑warehouse) and a factory `dwhOrdersAmmoFactory`.  
+* The factory pulls requests from a configuration slice and reuses pooled objects.
+
+### 3. Marketplace ammo (`ammo_marketplace.go`)
+* Declares three ammo types: order info retrieval, order placement and DWH orders.  
+* Implements `OrderInfoAmmo` (gets order data) and `OrderPlaceAmmo` (places an order).  
+* Provides factories for each type that use a shared pool.
+
+### 4. Common utilities (`common.go`)
+* Holds global helpers for loading an ECDSA key, creating gRPC transport credentials and building a Zap logger.  
+* These are used by the gun constructors in `gun_dwh.go` and `gun_marketplace.go`.
+
+### 5. Gun abstraction (`gun.go`, `gun_dwh.go`, `gun_marketplace.go`)
+* Defines a local `Gun` interface that extends `core.Gun`.  
+* Implements a generic `gun` struct that stores an aggregator, external data and a logger.  
+* The gun’s `Shoot` method executes any `Ammo` instance and reports the result to the aggregator.  
+* Two concrete constructors (`NewDWHGun`, `NewMarketplaceGun`) create guns wired with DWH or marketplace extensions.
+
+### 6. Provider abstraction (`provider.go`)
+* Implements a pool‑based provider that keeps an array of `sync.Pool`s indexed by ammo type and a channel for hand‑off.  
+* The provider is configured via a `Config` struct (limit, select string, detail slice).  
+* It registers each factory in the global `AmmoRegistry`, builds pools, and returns a ready `core.Provider`.
+
+### 7. Registry (`registry.go`)
+* Provides a thread‑safe registry map that stores constructor functions for ammo factories.  
+* The `Register` method adds a new entry; `Get` retrieves it.
+
+## Relations between code entities
+
+| Entity | Depends on | Notes |
+|--------|------------|-------|
+| `PoolAmmoFactory` | `sync.Pool` | Used by all concrete factory structs (`dwhOrdersAmmoFactory`, `orderInfoAmmoFactory`, etc.). |
+| `ammo_dwh.go` / `ammo_marketplace.go` | `core.Ammo` | Provide concrete ammo types that implement `Execute`. |
+| `gun_dwh.go` / `gun_marketplace.go` | `newGun(ext, log)` | Create guns that consume the above ammo types. |
+| `provider.go` | `AmmoRegistry.Get` | Pulls factory constructors from the registry map. |
+| `main.go` | `register.Gun`, `register.Provider` | Wire everything together and start execution. |
+
+The code is intentionally modular: each file focuses on a single concern (ammo, gun, provider, registry). The global registry allows new ammo types to be added without touching other files.
+
+---

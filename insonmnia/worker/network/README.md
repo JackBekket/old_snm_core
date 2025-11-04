@@ -1,60 +1,114 @@
-Okay, here's a markdown summary of the provided code, following your instructions as closely as possible:
+# Package `network`
+
+The **`network`** package implements a Docker‑plugin‑style networking stack that can be used by the *Insonmnia* worker.  
+It contains two independent drivers – an L2TP driver and a Tinc driver – each of which exposes its own IPAM interface, state persistence, and a tuner that starts Unix socket listeners for the plugin sockets.
 
 ---
 
-## SONM Network Stack (Insonmnia/Worker) - Summary
+## 1. High‑level architecture
 
-This package implements a complex network stack for Docker-based deployments within the SONM ecosystem. It leverages Tinc VPN, traffic control (TC), and custom IPAM drivers to manage container networking with advanced QoS capabilities. The code is heavily reliant on external dependencies like `xl2tpd`, BoltDB, and Docker's API.
+| Layer | Responsibility |
+|-------|----------------|
+| **State** (`l2tp_state.go`, `tinc_state.go`) | Holds all runtime data in BoltDB, provides lookup helpers, and serialises to JSON. |
+| **Drivers** (`l2tp_ipam.go`, `l2tp_network.go`, `tinc_driver.go`, `tinc_ipam.go`, `tinc_network.go`) | Implement the Docker‑plugin API for network creation, endpoint handling, IPAM requests, and container orchestration. |
+| **Tuners** (`l2tp_tuner.go`, `tinc_tuner.go`) | Create a Docker client, initialise both drivers, open Unix sockets, and expose a `Tuner` interface that can be called by the worker’s main entry point. |
+| **Manager** (`manager.go`, `manager_linux.go`, `manager_nonlinux.go`, `manager_remote.go`) | Provide a high‑level abstraction for creating Docker networks, aliasing interfaces, shaping traffic (TC), and remote QoS handling. |
 
-**Key Components:**
+The package is therefore a *complete* networking stack that can be used as a Docker network driver or as a standalone worker.
 
-*   **Tinc Network Driver (`tinc_network.go`):** Manages Tinc VPN tunnels within Docker containers. Creates networks, joins nodes via invitations, configures IP addresses, and handles container lifecycle (start/stop).
-*   **IPAM Drivers (`tinc_ipam.go`):** Allocates and releases IP addresses from pre-defined pools for Tinc networks. Uses random assignment with retries to avoid conflicts.
-*   **Traffic Control (`manager_linux.go`, `tc/*`):** Implements QoS shaping using HTB (Hierarchical Token Bucket) and TBF (Time-Based Filtering). Configures traffic rules via the Linux kernel's TC utilities.  Non-Linux platforms are stubbed out.
-*   **Persistent State (`tinc_state.go`):** Stores network configurations in BoltDB for persistence across restarts. Uses mutexes to ensure thread safety.
-*   **Docker Integration:** Heavily relies on Docker API calls (container creation, network management) and custom plugins for IPAM and networking.
+---
 
-**Configuration & Environment Variables:**
+## 2. Configuration sources
 
-The system is configured via YAML files with default values provided if not specified:
+| File | Key | Description |
+|------|-----|-------------|
+| `config.go` | `remote_qos` | Path to a remote QoS server (used by the L2TP driver). |
+| `l2tp_config.go` | `config` | Path to an L2TP network config file. |
+| `tinc_config.go` | `enabled`, `config_dir`, `docker_net_plugin_dir`, `docker_ipam_plugin_dir`, `docker_image`, `state_path` | All Tinc‑specific settings (default values are hard‑coded). |
 
-*   `ConfigDir`: Tinc configuration directory (`/tinc`).
-*   `DockerNetPluginSockPath`, `DockerIPAMPluginSockPath`: Unix socket paths for Docker plugin communication.
-*   `StatePath`: BoltDB storage location (`/var/lib/sonm/tinc_network_state`).
+All structs use YAML tags, so the worker can load a single YAML file that contains all of these keys.
 
-**Launch Edge Cases:**
+---
 
-*   Requires a running Docker daemon with the necessary permissions to create networks and containers.
-*   Tinc-related binaries (e.g., `xl2tpd`, `tc`) must be installed on the host system if using Linux-specific features.
-*   The network manager expects specific environment variables or configuration files to define network parameters.
+## 3. Environment variables / flags
 
-**File Structure:**
+* **Docker client** – created in each tuner (`client.NewEnvClient()`).
+* **Unix socket paths** – `t.cfg.NetSocketPath` and `t.cfg.IPAMSocketPath` for the L2TP driver; `tinc_cfg.DockerNetPluginSockPath` and `tinc_cfg.DockerIPAMPluginSockPath` for the Tinc driver.
+* **BoltDB bucket** – `"sonm_l2tp_driver_state"` (L2TP) or `"sonm_tinc_driver_state"` (Tinc).
+
+---
+
+## 4. File structure
 
 ```
 insonmnia/worker/network/
-├── config.go          # Basic NetworkConfig struct (unused)
-├── l2tp_config.go     # L2TP-specific configurations
-├── l2tp_ipam.go       # IPAM driver for L2TP networks
-├── l2tp_network.go    # Core L2TP network logic
-├── l2tp_state.go      # State management for L2TP networks
-├── l2tp_tuner.go      # Tunes L2TP settings in Docker containers
-├── manager.go         # Network Manager (main entry point)
-├── manager_linux.go   # Linux-specific network manager implementation
-├── manager_nonlinux.go # Stubbed non-Linux version
-├── manager_remote.go  # Remote QoS management via gRPC
-├── tinc_config.go     # Tinc configuration struct
-├── tinc_driver.go     # Docker plugin driver for Tinc networks
-├── tinc_ipam.go       # IPAM driver for Tinc networks
-├── tinc_network.go    # Core Tinc network logic
-├── tinc_state.go      # State management for Tinc networks
-├── tinc_tuner.go      # Tunes Tinc settings in Docker containers
-└── tuner.go           # Generic Tuner interface and implementation
+├─ config.go
+├─ l2tp_config.go
+├─ l2tp_ipam.go
+├─ l2tp_network.go
+├─ l2tp_state.go
+├─ l2tp_tuner.go
+├─ manager.go
+├─ manager_linux.go
+├─ manager_nonlinux.go
+├─ manager_remote.go
+├─ tinc_config.go
+├─ tinc_driver.go
+├─ tinc_ipam.go
+├─ tinc_network.go
+├─ tinc_state.go
+└─ tinc_tuner.go
 ```
 
-**Potential Issues & Dead Code:**
+---
 
-*   The `manager_nonlinux.go` file is almost entirely stubbed out, indicating incomplete cross-platform support.
-*   Some functions (e.g., network release in IPAM drivers) are implemented as no-ops, suggesting unfinished features.
-*   The code relies heavily on external binaries and Docker API calls, making it fragile to environment changes.
+## 5. Code relationships
 
-**Overall:** This is a complex, highly customized networking stack designed for specific SONM use cases. It's tightly coupled with Docker and requires careful configuration to function correctly. The reliance on external dependencies and incomplete implementations in certain areas could lead to instability or unexpected behavior.
+* `l2tpState` (in *state.go*) holds a map of `Networks`.  
+  Each network is an instance of `l2tpNetwork`, which in turn owns an endpoint (`l2tpEndpoint`).  
+  The driver (`L2TPNetworkDriver`) embeds the state and exposes methods that operate on those structures.
+
+* `parseOptsIPAM` / `parseOptsNetwork` (in *config.go*) read a `"config"` key from an IPAM or network request, unmarshal it into an `l2tpNetworkConfig`, validate it, and return the struct.  
+  The returned config is used by `newL2tpNetwork` to initialise a new network.
+
+* `IPAMDriver.RequestPool` creates a new L2TP network: it locks the state, parses options, builds a new network (`newL2tpNetwork`), registers it in the state and returns the pool ID.  
+  The corresponding IPAM request is handled by Docker’s *go‑plugins‑helpers*.
+
+* `TincNetworkDriver.CreateNetwork` does the same for Tinc: it creates a Docker container, starts tinc inside it, and stores the network in its own state (`TincNetworkState`).  
+  The tuner (`NewTincTuner`) opens Unix sockets at the paths defined in *tinc_config.go* and serves both drivers.
+
+* `manager_linux.go` implements concrete actions that are used by the local manager: aliasing a link, shaping traffic with TBF/HTB qdiscs, and creating IFB links.  
+  The remote manager (`remoteNetworkManager`) in *manager_remote.go* performs the same operations via a QoS server.
+
+---
+
+## 6. Edge cases of launching
+
+1. **L2TP driver** – Docker network creation is invoked with driver names `"l2tp_net"` and `"l2tp_ipam"`.  
+   The tuner starts listeners on `t.cfg.NetSocketPath` and `t.cfg.IPAMSocketPath`, so the worker can call `NewL2TPTuner(ctx)` to start the plugin.
+
+2. **Tinc driver** – Docker network creation is invoked with driver names `"tincipam"` and `"tincipam"`.  
+   The tuner starts listeners on the sockets defined in *tinc_config.go* (`/run/docker/plugins/tinc/tinc.sock` etc.).  
+
+3. **Remote QoS** – If a remote QoS server is configured, `manager_remote.go` will be used; otherwise the local manager from *manager_linux.go* handles all traffic‑control actions.
+
+---
+
+## 7. Summary of logic
+
+1. **Configuration** – YAML files are parsed into structs (`NetworkConfig`, `l2tpNetworkConfig`, `TincNetworkConfig`).  
+2. **State persistence** – BoltDB stores the entire state under a single key; helper methods `load()` and `sync()` keep it in sync with disk.  
+3. **Drivers** – Each driver implements the Docker‑plugin API (`CreateNetwork`, `DeleteNetwork`, etc.) and uses its own IPAM interface to allocate pools and addresses.  
+4. **Tuners** – The tuner creates a Docker client, opens Unix sockets for each plugin, starts goroutines that serve them, and exposes a `Tuner` interface that can be called by the worker’s main entry point.  
+5. **Manager actions** – Concrete actions (aliasing, shaping, IFB creation) are defined in *manager_linux.go*; they are returned by `localNetworkManager.NewActions()` and executed when a network is created.
+
+---
+
+## 8. Edge cases & missing code
+
+* The remote QoS server (`nilQOS`) in *manager_nonlinux.go* currently returns `ErrUnsupportedPlatform`; it should be implemented for non‑Linux platforms.  
+* Several methods (e.g., `AllocateNetwork`, `DeleteEndpoint` in the L2TP driver) are stubs that need to be filled out later.
+
+---
+
+**<end_of_output>**

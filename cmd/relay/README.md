@@ -1,32 +1,94 @@
-## Package: `relay`
+# Relay Server Package
 
-This package implements a relay server application. It loads configuration from a file, initializes logging, and starts the relay server. The server runs until an interrupt signal is received.
+## Overview
+`cmd/relay/main.go` implements the entry point for a **Relay‑based server** application.  
+It loads configuration, builds a logger, creates a `relay.Server`, and runs it concurrently with graceful shutdown handling.
 
-**Project Package Structure:**
+---
+
+## Project package structure
 
 ```
-cmd/relay/
-├── main.go
+cmd/
+└─ relay/
+   ├─ main.go
 ```
 
-**Configuration:**
+*Only one source file is present in this package.*
 
-*   **Configuration File:** The server configuration is loaded from a file specified by `app.ConfigPath` within the `cmd.AppContext`.
-*   **Logging Configuration:** Logging is configured using the `cfg.Logging` structure.
+---
 
-**Environment Variables/Flags/Cmdline Arguments:**
+## Imports & External Dependencies
 
-*   The application uses `cmd.NewCmd` which suggests it accepts standard command-line flags defined within the `cmd` package. Specific flags are not visible in the provided snippet.
+| Package | Alias |
+|---------|-------|
+| `context` | – |
+| `fmt` | – |
+| `github.com/noxiouz/zapctx/ctxlog` | `log` |
+| `github.com/sonm-io/core/cmd` | – |
+| `github.com/sonm-io/core/insonmnia/logging` | – |
+| `github.com/sonm-io/core/insonmnia/npp/relay` | – |
+| `golang.org/x/sync/errgroup` | – |
 
-**Edge Cases (Launch):**
+---
 
-*   The application can be launched directly via `go run cmd/relay/main.go`.
-*   The `cmd.NewCmd` function suggests the application can be launched with command-line arguments, but the exact arguments are not specified in the provided code.
+## Configuration sources
 
-**Code Relations:**
+| Source | Path / Variable | Description |
+|--------|-----------------|-------------|
+| `app.ConfigPath` | `cmd.AppContext.ConfigPath` | File path to the Relay server configuration (YAML/TOML/etc.). |
+| `cfg.Logging` | `relay.NewServerConfig(...).Logging` | Logging settings passed to `logging.BuildLogger`. |
+| `*cfg` | Dereferenced config struct | Full configuration forwarded to `relay.NewServer`. |
 
-*   `main.go` serves as the entry point, initializing the application using `cmd.NewCmd`.
-*   The `start` function handles the core logic of loading configuration, initializing logging, creating the relay server, and running it.
-*   The `relay.NewServerConfig` function is used to create the server configuration from the loaded file.
-*   The `logging.BuildLogger` function is used to create the logger instance.
-*   The `errgroup.Group` is used to manage concurrent execution of the server and signal handling.
+---
+
+## Environment variables, flags & command‑line arguments
+
+The package itself does not expose any custom environment variables or CLI flags; it relies on the surrounding `cmd.AppContext` infrastructure.  
+Typical usage:
+
+```bash
+# Build and run
+go build ./cmd/relay
+./relay --config /path/to/config.yaml
+```
+
+If the surrounding framework supports flag parsing, the following are expected:
+
+| Flag | Description |
+|------|-------------|
+| `--config` (or similar) | Path to the configuration file. |
+
+---
+
+## Code flow
+
+### `start(app cmd.AppContext) error`
+1. **Load config** – `relay.NewServerConfig(app.ConfigPath)`  
+   * Returns a `cfg` struct; errors are wrapped with context.
+2. **Build logger** – `logging.BuildLogger(cfg.Logging)`  
+3. **Prepare context** – `log.WithLogger(context.Background(), log.G(ctx))` and build options slice (`relay.WithLogger(log.G(ctx))`).  
+4. **Instantiate server** – `relay.NewServer(*cfg, options...)`.  
+5. **Run concurrently** – an `errgroup` is created; two goroutines are launched:  
+   * `server.Serve(ctx)` – main server loop.  
+   * `cmd.WaitInterrupted(ctx)` – waits for interrupt signal and triggers shutdown.  
+6. **Return** – function returns `nil` on success.
+
+### `main()`
+Creates a new command via `cmd.NewCmd(start)` and executes it, wiring the `start` routine into the CLI handling logic of the application.
+
+---
+
+## Edge cases & launch scenarios
+
+| Scenario | How to launch |
+|----------|---------------|
+| **Development** | `go run ./cmd/relay` – runs directly from source. |
+| **Production binary** | `go build -o relay ./cmd/relay && ./relay` – builds a standalone executable. |
+| **With custom config path** | Pass the config file via an environment variable or CLI flag that populates `app.ConfigPath`. |
+
+---
+
+## Summary
+
+The package provides a minimal yet complete bootstrap for a Relay server: it reads configuration, sets up logging, creates the server instance, and runs it with graceful shutdown. All logic is encapsulated in two functions (`start` and `main`) and relies on external packages for context handling, logging, and error grouping.

@@ -1,38 +1,62 @@
-## CPU Package Summary
+# CPU Device Package
 
-**Package Name:** `cpu` (based on directory structure)
+## Short Summary  
+The `cpu` package exposes a single helper function, **`GetCPUDevice()`**, that gathers low‑level CPU information from the host system using the *gopsutil* library and stores it in an application‑specific struct (`sonm.CPUDevice`). The function reads all available CPU descriptors, extracts the model name, counts sockets, aggregates core counts, and returns a fully populated device object.
 
-This package retrieves CPU device information for use within the larger `sonm-io/core` system. It leverages the `gopsutil/cpu` library to gather CPU details from the host system.
+---
 
-**Project Package Structure:**
+## Environment Variables, Flags & CLI Arguments  
+| Variable / Flag | Purpose |
+|------------------|---------|
+| **None** | The current implementation does not rely on any external environment variable or command‑line flag. It can be invoked directly from other packages (e.g., `main.go`) with no additional configuration needed. |
+
+---
+
+## File Structure  
 
 ```
 insonmnia/
-└── hardware/
-    └── cpu/
-        └── device.go
+└─ hardware/
+   └─ cpu/
+      └─ device.go
 ```
 
-**Configuration:**
+*`device.go`* – contains the entire logic for CPU discovery and struct population.
 
-*   No explicit configuration files or environment variables are used. The package relies entirely on the host system's CPU information as detected by `gopsutil/cpu`.
+---
 
-**Command-Line Arguments/Flags:**
+## How the Code Works  
+1. **Imports**  
+   - `errors`: standard error handling.  
+   - `github.com/shirou/gopsutil/cpu`: provides `cpu.Info()` that returns a slice of CPU descriptors.  
+   - `github.com/sonm-io/core/proto`: supplies the `CPUDevice` struct used to store gathered data.
 
-*   This package does not expose any command-line interface or flags. It's designed as a library component.
+2. **Function `GetCPUDevice()`**  
+   *Signature* – `func GetCPUDevice() (*sonm.CPUDevice, error)`  
+   *Logic Flow*  
+   - Calls `cpu.Info()`; if it fails, returns the error immediately.  
+   - Checks that at least one descriptor was returned (`len(info) == 0` → error).  
+   - Uses the first element of the slice to set `ModelName`.  
+   - Determines the number of sockets from the length of the slice.  
+   - Iterates over all descriptors, summing their core counts into `dev.Cores`.  
+   - Returns a pointer to the fully populated device struct and a nil error.
 
-**Edge Cases:**
+3. **Relations Between Code Entities**  
+   * `cpu.Info()` → raw data source → `info` slice.  
+   * First element of `info` → `ModelName`.  
+   * Length of `info` → number of sockets (`dev.Sockets`).  
+   * Loop over `info` → aggregate core counts into `dev.Cores`.
 
-*   If `gopsutil/cpu.Info()` fails to detect any CPUs, the `GetCPUDevice()` function returns an error.
-*   The package assumes all CPUs in a multi-CPU system have similar characteristics. If this is not true, the returned `sonm.CPUDevice` may be inaccurate.
-*   The total core count is calculated by summing the cores from all detected CPUs. This may not be the desired behavior in all cases.
+4. **Edge Cases & Launch Scenarios**  
+   - If the host system reports no CPU descriptors, the function returns an error `"no CPU detected"`.  
+   - The package can be used as a library in a CLI application: e.g., in `main.go` you could call `dev, err := cpu.GetCPUDevice()` and then print or persist the result.  
+   - Because the function returns a pointer, callers may modify the returned struct directly before further processing.
 
-**Code Relations:**
+---
 
-*   The `device.go` file contains the core logic for retrieving CPU information.
-*   The `sonm.CPUDevice` struct (defined in `github.com/sonm-io/core/proto`) is used to represent the CPU device information.
-*   The `gopsutil/cpu` package provides the underlying CPU detection functionality.
+## Summary of Logic  
+- **Input** – CPU descriptors from *gopsutil*.  
+- **Processing** – extract model name, count sockets, sum cores.  
+- **Output** – `*sonm.CPUDevice` ready for use by other parts of the system.  
 
-**Unclear Places/Dead Code:**
-
-*   None apparent. The code is relatively straightforward.
+This completes the logic of the entire package.

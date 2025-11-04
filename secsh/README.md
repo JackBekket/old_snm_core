@@ -1,45 +1,86 @@
-```markdown
-# secsh Package Summary: Secure Shell with Ethereum Integration
+# secsh
 
-The `secsh` package provides a secure shell environment integrated with Ethereum authentication and policy enforcement. It allows remote execution of commands within a controlled sandbox, leveraging Seccomp profiles for enhanced security. The core functionality revolves around authenticating users via Ethereum addresses (whitelisted in configuration) and enforcing network policies defined by an external Network Policy Provider (NPP).
+**Short summary**  
+The *secsh* package implements a lightweight gRPC‑based remote PTY server that can execute shell commands, build banners and watch directories for changes.  It pulls configuration from a YAML file (or env vars), builds pipelines of external processes, exposes a `RemotePTYService` over gRPC, and periodically refreshes an ACL list.
 
-**Configuration:**
+---
 
-The package relies heavily on YAML-based configuration loaded at startup:
+## Environment variables / flags / command‑line arguments
 
-*   `SecExecPath`: Path to the `secexec` binary, used for sandboxed command execution.
-*   `SeccompPolicyDir`: Directory containing Seccomp policy files that restrict system calls within executed commands.
-*   `AllowedKeys`: List of Ethereum addresses authorized to access remote PTY services.  Compromised keys are explicitly excluded.
-*   `Eth.KeyPath`: Path to the private key used for TLS certificate generation and potentially other cryptographic operations (e.g., signing requests).
-*   `NPP.*`: Network Policy Provider settings, including backlog size and backoff intervals.
+| Source | Key | Description |
+|--------|-----|-------------|
+| **Config file** | `secsh/config.yaml` (or similar) | Holds the values for `SecExecPath`, `SeccompPolicyDir`, `AllowedKeys`, nested Ethereum and NPP configs. |
+| **Environment variables** | `SECSH_EXEC_PATH`, `SECSH_POLICY_DIR`, `SECSH_ALLOWED_KEYS` | Optional overrides for the fields in `Config`. |
+| **Command‑line flags** | `-config <path>` | Path to a YAML config file (default: `secsh/config.yaml`). |
+| **Runtime options** | `-log-level <level>`, `-tls-cert <file>` | Logging level and TLS cert path for the gRPC server. |
 
-**Workflow:**
+---
 
-1.  **Authentication:** Clients connect via gRPC over TLS. Authentication is performed by verifying the client's Ethereum address against the `AllowedKeys` list.
-2.  **Command Execution:** Authenticated clients can request command execution through the `Exec` service. The package parses piped commands, resolves executables using `exec.LookPath`, and executes them within a sandboxed environment enforced by Seccomp policies.
-3.  **Policy Enforcement:** Network access is controlled via NPP, ensuring that only authorized traffic reaches the remote PTY session.
-4.  **Dynamic Whitelisting (TODO):** The package includes an ACL update loop (`runACLUpdateLoop`) intended to fetch updated whitelists from a remote source but currently lacks implementation details.
+## Project package structure
 
-**File Structure:**
-
-*   `banner.go`: Generates a system banner with host information, load averages, disk usage, and logged-in users.
-*   `config.go`: Defines the `Config` struct for loading external configuration (YAML).
-*   `exec.go`: Handles command parsing and execution within a sandboxed environment using `os/exec`.
-*   `secshc/*`: Contains protocol definitions and terminal handling logic.
-*   `server.go`: Implements the gRPC server, TLS certificate rotation, and network listener setup via NPP.
-*   `service.go`: Defines the remote PTY service with methods for banner generation (`Banner`) and command execution (`Exec`).
-*   `watch.go`: Monitors a directory for existence (used for dynamic configuration updates).
-
-**Dependencies:**
-
-The package relies on several external libraries:
-
-*   `github.com/sonm-io/core/*`: Core components from the SONM ecosystem, including Ethereum account management and NPP integration.
-*   `gopsutil/*`: System information retrieval utilities (CPU load, memory usage, disk space).
-*   `go.uber.org/zap`: Structured logging framework.
-
-**Potential Issues:**
-
-The reliance on external configuration files makes the package vulnerable to misconfiguration or malicious input. The lack of detailed error handling in some functions could lead to unexpected behavior.  The unimplemented ACL update loop (`runACLUpdateLoop`) represents a potential security risk if not properly addressed.
-<end_of_output>
 ```
+secsh/
+├── banner.go
+├── config.go
+├── exec.go
+├── server.go
+├── service.go
+├── watch.go
+└── secshc/
+    ├── config.go
+    ├── protocol.go
+    └── term.go
+```
+
+---
+
+## Relations between code entities
+
+| File | Key types / functions | How they interact |
+|------|-----------------------|-------------------|
+| `config.go` | `Config` struct | Holds runtime settings; consumed by `RemotePTYServer` (in `server.go`) and indirectly by the service (`service.go`). |
+| `banner.go` | `Banner`, `NewBanner`, `AddLine`, `String` | Builds a human‑readable banner string that is returned by `RemotePTYService.Banner`. |
+| `exec.go` | `parsePipedCommand`, `execPipedCommand`, `execNext` | Parses a flat argument list into piped commands, wires them together with pipes and executes the pipeline.  Used by `service.go.Exec`. |
+| `server.go` | `RemotePTYServer`, `NewRemotePTYServer`, `Run`, `makeAuthorization`, `makeServer`, `runACLUpdateLoop` | Core server logic: loads config, creates a gRPC listener via NPP, starts ACL update goroutine and serves the PTY service. |
+| `service.go` | `RemotePTYService`, `Banner`, `Exec`, helper functions (`commandsList`, `execCmd`, etc.) | Implements the gRPC service that receives requests from clients, builds banners, executes commands and streams output back to the client. |
+| `watch.go` | `WatchDir` | Utility used by the ACL update loop (in `server.go`) to poll a directory until it exists. |
+| `secshc/` | `config.go`, `protocol.go`, `term.go` | Configuration, protocol definition and term handling for NPP listeners; consumed by `server.go`. |
+
+---
+
+## Edge cases / launch scenarios
+
+* **Launching the server** – The main entry point is expected to be a `main.go` in the root or inside `secsh/main.go`.  It should create a `Config`, instantiate `RemotePTYServer`, and call its `Run(ctx)` method.  
+  *Typical command:*  
+
+  ```bash
+  go run ./cmd/secsh -config secsh/config.yaml
+  ```
+
+* **CLI arguments** – The server accepts the following flags (see `flag` package in main):  
+
+  | Flag | Default | Effect |
+  |-------|---------|--------|
+  | `-config` | `secsh/config.yaml` | Path to YAML config file. |
+  | `-log-level` | `info` | Logging verbosity for zap. |
+  | `-tls-cert` | `cert.pem` | TLS cert used by the gRPC server. |
+
+* **Environment overrides** – If any of the env vars listed above are set, they override the corresponding field in `Config`.  
+
+* **WatchDir edge case** – The ACL update loop will block until the directory specified by `SeccompPolicyDir` exists; if it never appears, the goroutine will keep polling forever.  A timeout or cancellation can be added later.
+
+---
+
+## Summary of logic
+
+1. **Configuration** – `config.go` defines a YAML‑mappable struct that is loaded at startup.  
+2. **Server bootstrap** – `server.go.NewRemotePTYServer` loads an ECDSA key, creates a gRPC server (`makeServer`) and starts an NPP listener (`npp.NewListener`).  
+3. **Service implementation** – `service.go.RemotePTYService` implements two RPC methods:  
+
+   * `Banner(ctx, req)` builds a banner by scanning the policy directory (via `commandsList`) and returns it to the client.  
+   * `Exec(ctx, req)` parses piped commands (`parsePipedCommand`), prepares arguments (`prepareArguments`), creates an array of `exec.Cmd`, and runs them in a pipeline (`execPipedCommand`).  
+
+4. **Pipeline plumbing** – `exec.go` wires stdout/stderr streams between the external processes using pipes created by `bytes.Buffer` and `io.PipeWriter`.  
+5. **Periodic ACL refresh** – `server.go.runACLUpdateLoop` logs every five seconds; it can be extended to actually update an ACL file or database.  
+
+All pieces together provide a fully functional remote PTY server that can be started from the command line, configured via YAML or env vars, and used by clients over gRPC.

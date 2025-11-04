@@ -1,67 +1,102 @@
-Okay, here's a markdown summary of the provided code, following your instructions.
+# Package **antifraud**
 
-# Antifraud Package Summary
-
-**Package Name:** `antifraud`
-
-This package implements an antifraud component designed to monitor and evaluate the quality of tasks executed within a distributed computing system (likely SONM). It tracks worker performance, detects potential fraud (e.g., underperforming workers), and can trigger blacklisting of malicious actors. The core logic revolves around fetching hashrate data from mining pools or analyzing logs, comparing it against expected benchmarks, and making decisions about whether to blacklist suppliers.
-
-**Configuration:**
-
-*   **Config struct:** The primary configuration source, loaded from YAML. Key parameters include:
-    *   `TaskQuality`: Threshold for determining if a task is performing poorly.
-    *   `QualityCheckInterval`: Frequency of quality checks.
-    *   `BlacklistCheckInterval`: Frequency of blacklist checks.
-    *   `ConnectionTimeout`: Timeout for gRPC connections.
-    *   `Whitelist`: List of Ethereum addresses exempt from blacklisting.
-    *   `LogProcessorConfig`: Settings for log-based hashrate monitoring.
-    *   `PoolProcessorConfig`: Settings for pool-based hashrate monitoring.
-*   **Flags:** Bit flags (`AllChecks`, `SkipBlacklisting`) used to control behavior.
-*   **Environment Variables:** None explicitly mentioned, but the configuration is likely loaded from a file path specified via an environment variable.
-
-**Files and Structure:**
-
+## Project file structure
 ```
 connor/antifraud/
-├── antifraud.go        # Core antifraud logic, main loop, deal management.
-├── antifraud_test.go   # Unit tests for antifraud component.
-├── blacklist_watcher.go # Manages blacklisting status, interacts with blacklist service.
-├── blacklist_watcher_test.go # Tests for blacklist watcher.
-├── config.go          # Configuration structures and validation.
-├── flags.go           # Defines flags for controlling behavior.
-├── flags_test.go      # Tests for flags.
-├── log_processor.go   # Monitors logs for hashrate data.
-├── log_processor_test.go # Tests for log processor.
-├── pool_processor.go  # Monitors pool APIs for hashrate data.
-├── pool_processor_test.go # Tests for pool processor.
-└── processor.go       # Defines processor interface and factory.
+├─ antifraud.go
+├─ antifraud_test.go
+├─ blacklist_watcher.go
+├─ blacklist_watcher_test.go
+├─ config.go
+├─ flags.go
+├─ flags_test.go
+├─ log_processor.go
+├─ log_processor_test.go
+├─ pool_processor.go
+├─ pool_processor_test.go
+└─ processor.go
 ```
 
-**Key Components:**
+## Environment variables, flags and command‑line arguments
 
-*   **AntiFraud Interface:** Defines the public API for running the antifraud component.
-*   **Blacklist Watcher:** Tracks blacklisting status, attempts to unblacklist addresses, and interacts with a blacklist service via gRPC.
-*   **Log Processor:** Parses logs (Claymore format) to extract hashrate data.
-*   **Pool Processor:** Fetches hashrate data from mining pool APIs (dwarfpool, uleypool).
-*   **Processor Factory:** Creates instances of log and pool processors based on configuration.
+| Source | Description |
+|--------|-------------|
+| `AllChecks` (int flag) | When set to `1`, the main loop will perform all checks in a single tick. |
+| `SkipBlacklisting` (int flag) | Bitmask used by `flags.SkipBlacklist()` to decide whether blacklisting should be skipped. |
+| `QualityCheckInterval` (`time.Duration`) | Interval for quality checks in `antifraud.go`. |
+| `BlacklistCheckInterval` (`time.Duration`) | Interval for blacklist checks in `antifraud.go`. |
+| `LogProcessorConfig.Format`, `PoolProcessorConfig.Format` | Processor format strings used by the factory. |
 
-**Launch Edge Cases:**
+No explicit command‑line arguments are defined; configuration is supplied via a `Config{}` struct (see below).
 
-*   The `Run` method in `antifraud.go` is the entry point. It requires a context for cancellation.
-*   The `NewAntiFraud` function takes dependencies (config, logger, gRPC connection) as arguments.
-*   The `flags` can be used to skip blacklisting.
+## Summary of package logic
 
-**Relations and Unclear Places:**
+### 1. Configuration (`config.go`)
+*Defines nested structs*  
+- `ProcessorConfig`: common fields for log and pool processors.  
+- `LogProcessorConfig` / `PoolProcessorConfig`: inline extensions with processor‑specific fields.  
+- `Config`: top‑level struct that aggregates quality metrics, intervals, nested configs, and a whitelist of Ethereum addresses.
 
-*   The `processor.go` defines the interface for processors, but the actual implementation details are split between `log_processor.go` and `pool_processor.go`.
-*   The `blacklist_watcher.go` relies on a gRPC connection to an external blacklist service, which is not fully defined in this package.
-*   The TODO comments in `antifraud.go` suggest that blacklist state should be persisted to a database, but the implementation is missing.
-*   The `flags` package seems simple, but its integration with the main logic is not immediately obvious.
+### 2. Processor abstraction (`processor.go`)
+*Defines the public interface*  
+```go
+type Processor interface {
+    Run(ctx context.Context) error
+    TaskID() string
+    TaskQuality() (bool, float64)
+}
+```
+A factory (`ProcessorFactory`) creates log and pool processors based on a format string.  
+`NewProcessorFactory` builds two builder functions that close over the config’s format values; `WithLogger` / `WithClientConn` supply optional logger and GRPC client.
 
-**Dead Code:**
+### 3. Log processor (`log_processor.go`)
+*Creates a worker that fetches logs from a node, persists them to disk and tracks hashrate.*  
+- Constructor `newLogProcessor` wires the logger, config, deal, task ID and a gRPC client.  
+- `Run` starts a ticker loop: every 5 s it updates an EWMA of hashrate; every second it ticks that value.  
+- `fetchLogs` sends a `TaskLogsRequest`, pipes the response into a local file (`maybeOpenHistoryFile`) and parses each line with `logParser`.  
+- `TaskQuality()` returns whether the warm‑up period is finished and the current hashrate relative to the benchmark.
 
-*   No obvious dead code detected. The package appears to be actively maintained.
+### 4. Pool processor (`pool_processor.go`)
+*Polls a mining pool (either dwarf or uleypool) and updates an EWMA of hashrate.*  
+- Two constructors, `newDwarfPoolProcessor` and `newUleyPoolProcessor`, create a `commonPoolProcessor`.  
+- The run loop is similar to the log processor: it ticks the EWMA every second, then triggers a fetch via either `dwarfPoolUpdateFunc` or `uleypoolUpdateFunc`.  
+- Queue logic (`updateHashRateQueue`, `nonZeroHashrate`) keeps a capped deque of recent samples.
 
-**Summary:**
+### 5. Main antifraud component (`antifraud.go`)
+*Orchestrates the whole system.*  
+- Holds a map of deals to their log and pool processors, a blacklist watcher map, factories, config, node connection, client and logger.  
+- `Run` starts two tickers: one for quality checks (`checkDeals`) and another for blacklist checks (`checkBlacklist`).  
+- `TrackTask` registers a new deal’s task by creating both processors via the factory and running them concurrently with an errgroup.  
+- `DealOpened` adds a deal to the internal map and creates a watcher if needed.  
+- `FinishDeal` decides which blacklist type to use, then calls `finishDealWithRetry`.  
+- Helper methods (`lifeTime`, `whoToBlacklist`, `isAddressWhitelisted`) provide metrics and whitelist checks.
 
-The `antifraud` package provides a robust system for monitoring task quality and preventing fraud in a distributed computing environment. It leverages external data sources (mining pools, logs) and gRPC communication to make informed decisions about blacklisting malicious actors. The package is well-structured and configurable, but some aspects (blacklist persistence, external service integration) require further investigation.
+### 6. Blacklist watcher (`blacklist_watcher.go`)
+*Keeps an address in a temporary blacklist while the deal is active.*  
+- Holds logger, watched address, client, next period, un‑blacklist time and last success timestamp.  
+- `Failure()` and `Success()` adjust the period and timestamps; `TryUnblacklist` removes the address from the blacklist via gRPC.
+
+## Relations between code entities
+
+| Entity | Depends on | Notes |
+|--------|------------|-------|
+| `ProcessorFactory` | `Config` (format strings) | Creates log/pool processors. |
+| `logProcessor` | `commonPoolProcessor`, `blacklistWatcher` | Uses the factory to create a pool processor for each deal. |
+| `commonPoolProcessor` | `logProcessor` | Provides shared logic for both dwarf and uleypool workers. |
+| `antifraud` | `ProcessorFactory`, `Config`, `grpc.ClientConn` | Top‑level orchestrator that stores deals, watchers and runs checks. |
+| `blacklistWatcher` | `antifraud` | Each deal has one watcher; the main loop calls its `Failure()`/`Success()`. |
+
+The factory’s builder functions close over the format strings from `Config`, so changing a processor type (e.g., `"dwarf"` vs `"uleypool"`) automatically selects the correct constructor.
+
+## Edge cases for launching
+
+* **Initial startup** – `NewAntiFraud(cfg, cc)` must be called with a fully populated `Config{}` and an active gRPC connection.  
+  * The first call to `TrackTask` will create both processors; they run concurrently until the context is cancelled.  
+* **Quality check interval** – If `QualityCheckInterval` is too short, `checkDeals` may be called before all processors have finished their warm‑up period; the code guards against this by checking `isAddressWhitelisted`.  
+* **Blacklist handling** – The watcher’s `Failure()` doubles the next period until it reaches `maxStep`; if a deal finishes early, `finishDealWithRetry` will keep retrying every 10 s.  
+
+All tests in the package (`*_test.go`) exercise the core logic: whitelist lookup, flag parsing, log line parsing, queue handling and watcher state transitions.
+
+---
+
+**<end_of_output>**

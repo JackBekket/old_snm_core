@@ -1,35 +1,64 @@
-## Package: `ram`
+# ram  
 
-This package provides a device representation for system RAM, likely intended for use within a larger distributed computing or resource management framework (possibly SONM, given the `sonm.RAMDevice` struct). It retrieves system memory statistics using the `gopsutil/mem` package and exposes them through a custom `sonm.RAMDevice` struct.
+## Overview  
+`insonmnia/hardware/ram/device.go` implements a small helper that reads the current system memory statistics and returns them wrapped in a `sonm.RAMDevice` struct. The file contains only one exported function, `NewRAMDevice`, which is intended to be used by other parts of the project or as a CLI entry point.
 
-**Project Package Structure:**
+---
+
+## Package structure  
 
 ```
-insonmnia/
-└── hardware/
-    └── ram/
-        └── device.go
+insonmnia/hardware/ram/
+├── device.go
 ```
 
-**Configuration:**
+* **device.go** – main source file; defines package `ram` and provides the public constructor `NewRAMDevice`.
 
-*   No explicit configuration files or environment variables are used. The package relies entirely on the system's reported memory statistics.
+---
 
-**Command-Line Arguments/Flags:**
+## Imports & external data sources  
+| Import | Purpose |
+|--------|---------|
+| `github.com/shirou/gopsutil/mem` | Provides `mem.VirtualMemory()` to read system memory statistics. |
+| `github.com/sonm-io/core/proto` | Supplies the `RAMDevice` struct type used as return value. |
 
-*   This package does not appear to be a standalone executable; it's a library intended to be used by other components. Therefore, it has no command-line arguments or flags.
+The function pulls a `VirtualMemoryStat` from `gopsutil`, then maps its fields into a new `sonm.RAMDevice`.  
+*Note:* The field mapping uses `m.Total` for both `Total` and `Available`; this may be intentional or an oversight (perhaps it should use `m.Available`).  
 
-**Edge Cases:**
+---
 
-*   The package depends on the accuracy of the `gopsutil/mem` package, which in turn relies on the underlying operating system's memory reporting. Inaccurate or unavailable memory statistics could lead to incorrect device representation.
-*   The `Total` and `Available` fields being set to the same value might be a simplification that doesn't accurately reflect the system's memory state.
+## Environment variables, flags & command‑line arguments  
+No explicit configuration files or flag parsing are present in the current package. If the project is built as a CLI tool, the only required environment variable would be any that `gopsutil` expects (none by default). The function can be called directly from other packages; no command‑line flags are defined here.
 
-**Code Relations:**
+---
 
-*   The `device.go` file contains the core logic for creating a `sonm.RAMDevice` instance.
-*   The `gopsutil/mem` package is used as an external dependency to retrieve system memory statistics.
-*   The `sonm.RAMDevice` struct is likely defined in another part of the `sonm-io/core/proto` package.
+## Edge cases & launch scenarios  
+* **CLI/entry point** – If this package is imported into a main program, the exported `NewRAMDevice()` can be invoked to obtain current RAM statistics.  
+* **Error handling** – The function returns an error if `mem.VirtualMemory()` fails; callers should check for `nil` before using the returned pointer.  
 
-**Unclear Places/Dead Code:**
+---
 
-*   The reason for setting `Total` and `Available` to the same value is unclear without further context. It could be a deliberate design choice or a potential bug.
+## Summary of code logic  
+
+1. **Package declaration**: `package ram`.  
+2. **Import block** pulls in memory stats and the core data struct.  
+3. **Function `NewRAMDevice`**  
+   ```go
+   func NewRAMDevice() (*sonm.RAMDevice, error) {
+       m, err := mem.VirtualMemory()
+       if err != nil { return nil, err }
+   
+       return &sonm.RAMDevice{
+           Total:     m.Total,
+           Available: m.Total,  // likely should be m.Available
+           Used:      m.Used,
+       }, nil
+   }
+   ```  
+   * Calls `mem.VirtualMemory()` to obtain a snapshot of system memory.  
+   * Handles any error immediately.  
+   * Constructs and returns a pointer to a new `sonm.RAMDevice` with the current values.
+
+---
+
+**End of output**

@@ -1,29 +1,69 @@
-# Package: `config`
+# Config Package Summary
 
-This package provides utilities for loading YAML configurations, converting field names to snake case, and recursively lowercasing keys within nested maps. It leverages reflection for dynamic tag generation based on struct fields. The core functionality revolves around parsing configuration files, applying transformations (like snake casing), and unmarshaling the data into a destination interface.
+The **config** package (located under `util/config`) provides a small, reusable helper for loading, transforming and saving YAML configuration files.  
+It also contains a lightweight “tagger” that can generate snake‑case struct tags from Go structs.
 
-**Project Package Structure:**
+---
+
+## Files & Paths
 
 ```
 util/
-└── config/
-    ├── config.go
-    ├── retag.go
-    └── retag_test.go
+└─ config/
+   ├─ config.go          # LoadWith – round‑trip load/modify/save
+   ├─ retag.go           # SnakeCaseTagger, MakeTag, toSnakeCase, SnakeToLower
+   └─ retag_test.go      # unit test for toSnakeCase
 ```
 
-**Configuration & Environment Variables:**
+---
 
-*   `config.LoadWith`: Takes a file path (`path` string) as input, which specifies the YAML configuration file to load. No environment variables or command-line arguments are directly used for configuration within this package's code snippet. The transformation function passed to `LoadWith` can be customized via external logic if needed.
+## Core Functionality
 
-**Edge Cases & Launching:**
+| File | Key Elements |
+|------|---------------|
+| **config.go** | `LoadWith(dst interface{}, path string, fn func(map[interface{}]interface{})) error` – reads a YAML file into a generic map, lets the caller mutate it via a callback, then writes it back and finally unmarshals into the supplied destination. |
+| **retag.go** | * `SnakeCaseTagger` – alias for `string`. <br> * `MakeTag(fieldIndex int, t reflect.Type) reflect.StructTag` – builds a struct tag in snake‑case form for a field of type `t`. <br> * `toSnakeCase(s string) string` – converts any string into lower‑cased snake‑case. <br> * `isDelimiter(r rune) bool` – helper used by `toSnakeCase`. <br> * `SnakeToLower(m map[interface{}]interface{})` – recursively walks a map and normalizes all keys to lower‑case snake form. |
+| **retag_test.go** | Unit test that verifies `toSnakeCase` against a wide range of inputs. |
 
-This is a utility package; it doesn't have direct launching points like `main()` functions. It's designed to be imported and used by other applications or services that handle the actual execution flow. The primary edge case lies in handling invalid YAML files, missing configuration paths, or errors during unmarshaling into the destination interface (`dst`).
+---
 
-**Code Relations & Unclear Places:**
+## Environment Variables / Flags
 
-*   `config.go`: Handles file loading and YAML parsing/unmarshaling with optional transformation via callback function.
-*   `retag.go`: Provides snake case conversion utilities for field names, used to generate struct tags dynamically. The `SnakeToLower` function recursively lowercases map keys, which could be useful in scenarios where configuration data needs normalization before processing.
-*   `retag_test.go`: Contains unit tests that verify the correctness of the snake case conversion logic.
+* **Path to config file** – passed as the second argument to `LoadWith`.  
+  Example: `config.LoadWith(&cfg, "config.yaml", func(m map[interface{}]interface{}) { … })`.
 
-The relationship between these files is clear: `config.go` uses functions from `retag.go` to transform field names into snake case during YAML loading, ensuring consistency in configuration data. The test suite confirms that the transformation works as expected across various input strings. No dead code or unclear places are apparent within this snippet.
+* **Destination variable** – any Go value that implements `yaml.Unmarshal` (e.g., a struct).  
+
+No explicit command‑line flags are defined in this package; it is intended to be used programmatically.
+
+---
+
+## How the Application Can Be Launched
+
+1. **As a library**  
+   Import `"util/config"` and call `LoadWith` from any other Go file:
+
+   ```go
+   var cfg MyConfigStruct
+   err := config.LoadWith(&cfg, "config.yaml", func(m map[interface{}]interface{}) {
+       // optional modifications before saving
+   })
+   ```
+
+2. **As a CLI helper**  
+   If the project contains a `main` package that needs to read/write configuration files, it can invoke `LoadWith` directly or wrap it in its own command‑line interface.
+
+---
+
+## Summary of Logic
+
+* `config.go` implements a generic load–modify–save cycle for YAML files.  
+  It reads the file into memory, unmarshals into an intermediate map (`ty`), lets the caller mutate that map via a callback, marshals it back to bytes, and finally writes the result into the supplied destination interface.
+
+* `retag.go` supplies helper types and functions for generating snake‑case struct tags.  
+  The `SnakeCaseTagger.MakeTag` method builds a tag string like ``key:"value"`` using the `toSnakeCase` routine.  
+  `SnakeToLower` walks nested maps recursively, converting all keys to lower‑cased snake form.
+
+* `retag_test.go` ensures that `toSnakeCase` behaves correctly across many edge cases (empty strings, camel case, spaces, dashes, underscores, etc.).
+
+Overall, the package offers a compact yet flexible way to handle YAML configuration files and to generate struct tags for Go structs.

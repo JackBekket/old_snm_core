@@ -1,30 +1,72 @@
-# SONM Node Application
+# Package `node` – Application Bootstrap
 
-**Project Package Structure:**
+The file **cmd/node/main.go** contains the entry point for a command‑line executable that loads configuration, creates a logger, starts a node server and exposes Prometheus metrics.  
+It is the glue code that turns the various sub‑packages (`logging`, `node`, `metrics`) into one runnable binary.
 
-- `cmd/node/main.go`
+---
 
-**Code Summary:**
+## Short Summary
 
-The `main.go` file serves as the entry point for a SONM node application, responsible for initializing and running the core components of the node. It loads configuration from a specified path (configurable via command line or environment variables), sets up logging with structured context-based logging (`ctxlog`), validates version compatibility, starts the node server, and exposes Prometheus metrics. The `run` function orchestrates these tasks using an error group to manage concurrent execution and ensure proper shutdown.
+* Loads a config file via `node.NewConfig(app.ConfigPath)`.
+* Builds a structured logger with `logging.BuildLogger(cfg.Log)`.
+* Wraps a background context with the logger and validates the application version.
+* Starts three concurrent goroutines:
+  1. Waits for an interrupt signal (`cmd.WaitInterrupted`).
+  2. Creates a node instance (`node.New`) and serves it.
+  3. Runs a Prometheus metrics exporter on `cfg.MetricsListenAddr`.
+* All errors are propagated back to the caller; the binary exits when all goroutines finish.
 
-**Configuration:**
+---
 
-- **Config Path:** Determined by `app.ConfigPath`, either via command line argument or environment variable (not explicitly defined in this snippet but implied).
-- **Metrics Listen Address:** Configured within the loaded configuration file, used for Prometheus metrics endpoint.
-- **Logging Settings:** Controlled through the configuration file to adjust log levels and output formats.
+## Environment Variables, Flags & Command‑Line Arguments
 
-**Launch Edge Cases:**
+| Variable / Flag | Purpose |
+|------------------|---------|
+| `app.ConfigPath` (flag) | Path to a YAML/JSON config file that contains logging and metrics settings. |
+| `cfg.MetricsListenAddr` | Address on which the Prometheus exporter listens. |
+| `cfg.Log` | Logger configuration section used by `logging.BuildLogger`. |
 
-The application can be launched with or without command line arguments (e.g., specifying a custom config path). If no arguments are provided, it defaults to using the default configuration location. The behavior depends on how `app.ConfigPath` is set up in the environment or via flags.
+---
 
-**Relations Between Entities:**
+## Project Package Structure
 
-- **Configuration Loading:** The `node.NewConfig` function reads settings from the specified file path (`app.ConfigPath`).
-- **Logging Setup:** Logging is initialized based on configuration parameters, using structured context logging for better traceability.
-- **Server Instantiation:** The node server is created with loaded configurations and logger instances.
-- **Metrics Exporting:** Prometheus metrics are exposed at a configurable endpoint defined in the config file.
+```
+cmd/
+└─ node/
+   └─ main.go
+```
 
-**Unclear Places/Dead Code:**
+*Only one source file is present; it defines the binary entry point.*
 
-No unclear places or dead code were identified within this snippet. The logic appears straightforward, focusing on initialization, execution, and shutdown of the SONM node application.
+---
+
+## Relations Between Code Entities
+
+1. **`main()`** – creates a command (`cmd.NewCmd(run)`) and immediately executes it.  
+2. **`run(ctx context.Context, app *App)`** (defined in the same file) – performs all initialization steps described above.  
+3. **`node.NewConfig(app.ConfigPath)`** – reads configuration from disk; its return value is stored in `cfg`.  
+4. **`logging.BuildLogger(cfg.Log)`** – creates a logger that is attached to the context via `ctxlog.WithLogger`.  
+5. **`errgroup.WithContext(ctx)`** – provides a wait group that runs three goroutines concurrently: interrupt handling, node serving, and metrics exporting.
+
+---
+
+## Edge Cases & Launch Options
+
+| Scenario | Command |
+|----------|---------|
+| Run directly from source | `go run ./cmd/node` |
+| Build binary for distribution | `go build -o bin/node ./cmd/node && ./bin/node --config=...` |
+
+The binary can be started with the usual Go flags (`--config`, etc.) that populate `app.ConfigPath`. Once launched, it will keep running until an interrupt signal is received or all goroutines finish.
+
+---
+
+## Summary of Logic
+
+1. **Bootstrap** – `main()` starts the command.
+2. **Configuration** – `run` loads config and logger.
+3. **Context & Version** – context enriched with logger; version validated.
+4. **Concurrent Tasks** – three goroutines: interrupt wait, node serve, metrics export.
+5. **Completion** – waits for all tasks to finish; propagates any error.
+
+This file is the single orchestrator that turns configuration and node logic into a working command‑line application.
