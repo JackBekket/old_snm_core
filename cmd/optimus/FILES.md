@@ -1,43 +1,84 @@
 # cmd/optimus/main.go  
-## Package: `main`  
+**Package / Component**    
+`main`  
   
-**Imports:**  
+### Imports  
+```go  
+import (  
+	"context"  
+	"fmt"  
   
-*   `context`: For managing context.  
-*   `fmt`: For formatted I/O.  
-*   `github.com/noxiouz/zapctx/ctxlog`: For structured logging with context.  
-*   `github.com/sonm-io/core/cmd`: For command-line application structure.  
-*   `github.com/sonm-io/core/insonmnia/version`: For version validation.  
-*   `github.com/sonm-io/core/optimus`: Core functionality, config loading, and bot creation.  
-*   `go.uber.org/zap`: For structured logging.  
-*   `go.uber.org/zap/zapcore`: For zap configuration.  
+	"github.com/noxiouz/zapctx/ctxlog"          // logger helper  
+	"github.com/sonm-io/core/cmd"               // command‑line framework  
+	"github.com/sonm-io/core/insonmnia/version"  // version handling  
+	"github.com/sonm-io/core/optimus"           // core Optimus logic  
+	"go.uber.org/zap"  
+	"go.uber.org/zap/zapcore"  
+)  
+```  
   
-**External Data/Input Sources:**  
+### External data / input sources    
+| Source | Description |  
+|--------|-------------|  
+| `app.ConfigPath` | Path to the configuration file that will be parsed by `optimus.LoadConfig`. |  
+| `cfg.Restrictions` | Optional restrictions passed to `optimus.RestrictUsage`. |  
+| `cfg.Logging.LogLevel()` | Logging level used when building the Zap logger. |  
+| `app.Version` | Version string supplied to the Optimus instance via `optimus.WithVersion`. |  
   
-*   **Configuration File:** Loaded via `optimus.LoadConfig(app.ConfigPath)`. The path to the config file is provided through the `app.ConfigPath` variable, which is part of the `cmd.AppContext`.  
-*   **Command-Line Arguments:** Handled by the `cmd` package, which parses arguments and passes them to the `run` function via `cmd.AppContext`.  
-*   **Environment Variables:** Potentially used within the configuration file itself.  
-*   **App Version:** Passed via `app.Version` to `optimus.NewOptimus`.  
+### TODOs  
+No explicit `TODO:` comments are present in this file, but future improvements could include:  
+- Adding error handling for missing config fields.  
+- Enhancing logging configuration (e.g., adding more output paths).  
   
-**TODOs:**  
+---  
   
-*   None found in the provided code snippet.  
+## Summary of major code parts  
   
-**Code Summary:**  
+### 1. `main()` – program entry point    
+```go  
+func main() {  
+	cmd.NewCmd(run).Execute()  
+}  
+```  
+Creates a new command using the `cmd` package, passing the `run` function as its handler, and immediately executes it. This is the bootstrap that starts the whole application.  
   
-### Initialization and Configuration  
+### 2. `run(app cmd.AppContext) error` – core workflow    
+The `run` function orchestrates the entire startup sequence:  
   
-The `main` function initializes the command-line application using the `cmd` package and executes the `run` function. The `run` function loads the configuration from a file specified by `app.ConfigPath` using `optimus.LoadConfig`. It handles potential restrictions defined in the configuration using `optimus.RestrictUsage`.  
+1. **Configuration loading**    
+   ```go  
+   cfg, err := optimus.LoadConfig(app.ConfigPath)  
+   ```  
+   Loads a configuration structure from the path supplied by the command context.  
   
-### Logging Setup  
+2. **Optional restrictions handling**    
+   If the loaded config contains restrictions, they are applied via `optimus.RestrictUsage` and cleaned up with a deferred delete.  
   
-The code configures a `zap` logger based on the logging level specified in the configuration (`cfg.Logging.LogLevel()`). The logger is then attached to the context using `ctxlog.WithLogger`. The logger is configured to output to stdout and stderr with colored level encoding.  
+3. **Zap logger setup**    
+   A `zap.Config` is built with console encoding, development mode off, and a single output path (`stdout`). The level is set from the configuration’s logging level, and the encoder config is tweaked to use capital color levels.  
   
-### Version Validation  
+4. **Context creation & version validation**    
+   ```go  
+   ctx := ctxlog.WithLogger(context.Background(), log)  
+   version.ValidateVersion(ctx, version.NewLogObserver(log.Sugar()))  
+   ```  
+   A new context enriched with a logger is created, and the current application version is validated against the configuration.  
   
-The `version.ValidateVersion` function is called to validate the application version using the configured logger.  
+5. **Optimus instance creation**    
+   ```go  
+   bot, err := optimus.NewOptimus(cfg,  
+       optimus.WithVersion(app.Version),  
+       optimus.WithLog(log.Sugar()))  
+   ```  
+   An `optimus` object (the core business logic) is instantiated with the loaded config and options for versioning and logging.  
   
-### Optimus Bot Creation and Execution  
+6. **Execution**    
+   ```go  
+   return bot.Run(ctx)  
+   ```  
+   Finally, the Optimus instance runs its main routine using the prepared context.  
   
-An `Optimus` bot is created using `optimus.NewOptimus`, passing the configuration, application version, and logger. Finally, the bot's `Run` method is called with the context to start the application's core logic.  
+---  
+  
+This file serves as the bootstrap of a command‑line tool that loads configuration, sets up structured logging with Zap, validates the application version, and hands control over to an `optimus` core component.  
   

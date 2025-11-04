@@ -1,77 +1,166 @@
 # insonmnia/structs/image.go  
-## Package: `structs`  
-  
-**Imports:**  
-  
-*   `strconv`: For string to integer conversion.  
-*   `github.com/sonm-io/core/proto`: SONM core proto definitions.  
-*   `google.golang.org/grpc/codes`: gRPC error codes.  
-*   `google.golang.org/grpc/metadata`: gRPC metadata handling.  
-*   `google.golang.org/grpc/status`: gRPC status error creation.  
-  
-**External Data/Input Sources:**  
-  
-*   gRPC metadata (`metadata.MD`) from incoming context. Specifically, the `deal` and `size` headers are required.  
-*   The `sonm.Worker_PushTaskServer` interface, which provides the gRPC stream context.  
-  
-**TODOs:**  
-  
-*   None found in this code snippet.  
+**Package / Component**    
+`structs`  
   
 ---  
   
-### `ImagePush` Struct  
+### Imports  
+```go  
+import (  
+	"strconv"  
   
-The `ImagePush` struct embeds `sonm.Worker_PushTaskServer` and stores the `dealId` (string) and `imageSize` (int64). It's designed to handle image pushing tasks within the SONM framework.  
+	"github.com/sonm-io/core/proto"  
+	"google.golang.org/grpc/codes"  
+	"google.golang.org/grpc/metadata"  
+	"google.golang.org/grpc/status"  
+)  
+```  
+* `strconv` – for parsing string to int64.    
+* `github.com/sonm-io/core/proto` – contains the gRPC server interface used (`Worker_PushTaskServer`).    
+* `google.golang.org/grpc/codes`, `metadata`, `status` – gRPC utilities for status handling and metadata extraction.  
   
-### Header Extraction Functions  
+---  
   
-*   `requireHeader`: Extracts a string value from gRPC metadata by header name. Returns an error if the header is missing.  
-*   `RequireHeaderInt64`: Extracts a string value from gRPC metadata, parses it as an int64, and returns an error if parsing fails or the header is missing.  
+### External Data / Input Sources  
+| Source | Description |  
+|--------|-------------|  
+| `stream.Context()` | Incoming context from a gRPC call, used to obtain metadata. |  
+| Metadata key `"deal"` | Header value parsed as string (used by `requireHeader`). |  
+| Metadata key `"size"` | Header value parsed as int64 (used by `RequireHeaderInt64`). |  
   
-### `NewImagePush` Function  
+---  
   
-This function constructs an `ImagePush` instance from a `sonm.Worker_PushTaskServer` stream. It extracts the `deal` and `size` headers from the incoming gRPC metadata, converts `size` to an int64, and initializes the `ImagePush` struct.  Returns an error if metadata is missing or invalid.  
+### TODOs  
+No explicit TODO comments are present in this file.  
   
-### Accessor Methods  
+---  
   
-*   `DealId()`: Returns the stored `dealId`.  
-*   `ImageSize()`: Returns the stored `imageSize`.  
+## Summary of Major Code Parts  
+  
+#### ### Struct Definition  
+```go  
+type ImagePush struct {  
+	sonm.Worker_PushTaskServer  
+	dealId    string  
+	imageSize int64  
+}  
+```  
+* Holds a gRPC server stream (`Worker_PushTaskServer`) and two fields: `dealId` (string) and `imageSize` (int64).    
+* Provides a lightweight container for data needed during an image‑push task.  
+  
+#### ### Helper Functions  
+1. **`requireHeader(md metadata.MD, name string)`** – retrieves the last value of a named header from gRPC metadata; returns it as a string or an error if missing.  
+2. **`RequireHeaderInt64(md metadata.MD, name string)`** – wraps `requireHeader`, converting the retrieved string into an int64 using `strconv.ParseInt`.  
+  
+#### ### Constructor  
+```go  
+func NewImagePush(stream sonm.Worker_PushTaskServer) (*ImagePush, error)  
+```  
+* Extracts incoming metadata from the provided stream context.    
+* Reads `"deal"` and `"size"` headers via the helper functions.    
+* Returns a fully initialized `ImagePush` instance or an error if any step fails.  
+  
+#### ### Accessor Methods  
+```go  
+func (p *ImagePush) DealId() string  
+func (p *ImagePush) ImageSize() int64  
+```  
+* Simple getters for the two fields, enabling other components to read the deal ID and image size from an `ImagePush` instance.  
+  
+---  
+  
+These sections together provide a concise wrapper around gRPC metadata handling for pushing images in the system.  
   
 # insonmnia/structs/network_spec.go  
-## Package: `structs`  
+**Package / Component**    
+`structs`  
   
-**Imports:**  
+---  
   
-*   `errors`: For error handling.  
-*   `strings`: For string manipulation (specifically, removing hyphens from UUIDs).  
-*   `github.com/pborman/uuid`: For generating UUIDs.  
-*   `github.com/sonm-io/core/proto`: For using `sonm.NetworkSpec` type.  
+### Imports  
+```go  
+import (  
+	"errors"  
+	"strings"  
   
-**External Data/Input Sources:**  
+	"github.com/pborman/uuid"  
+	"github.com/sonm-io/core/proto"  
+)  
+```  
+* `errors` – standard Go package for error handling.    
+* `strings` – standard Go package for string manipulation.    
+* `github.com/pborman/uuid` – third‑party UUID generator used to create unique identifiers.    
+* `github.com/sonm-io/core/proto` – external data source; contains the definition of `sonm.NetworkSpec`.  
   
-*   `sonm.NetworkSpec`: This struct is used as input to create `NetworkSpec` instances. The validity of this input is checked by `validateNetworkSpec`.  
-*   UUID generation: The code relies on the `github.com/pborman/uuid` package to generate unique identifiers.  
+---  
   
-**TODOs:**  
+### External Data / Input Sources  
+| Source | Description |  
+|--------|-------------|  
+| `github.com/sonm-io/core/proto` | Provides the base type `sonm.NetworkSpec`. The struct defined in this file embeds that type and adds a local identifier (`NetID`). |  
   
-*   None found in this code snippet.  
+---  
   
-**Summary of Code Parts:**  
+### TODOs  
+No explicit TODO comments were found in the code.  
   
-### `NetworkSpec` Struct  
+---  
   
-Defines a custom struct `NetworkSpec` that embeds `sonm.NetworkSpec` and adds a `NetID` field. This struct appears to be a wrapper around the core `sonm.NetworkSpec` type, adding an identifier.  
+## Summary of Major Code Parts  
   
-### `validateNetworkSpec` Function  
+### 1. Type Definition – `NetworkSpec`  
+```go  
+type NetworkSpec struct {  
+	*sonm.NetworkSpec  
+	NetID string  
+}  
+```  
+* Embeds a pointer to `sonm.NetworkSpec` so that all fields and methods from the external type are available directly on `structs.NetworkSpec`.    
+* Adds an additional field `NetID`, which holds a unique identifier for each network specification.  
   
-Validates a `sonm.NetworkSpec` instance, ensuring that the `GetType()` field is not empty. Returns an error if the type is missing.  
+### 2. Validation – `validateNetworkSpec`  
+```go  
+func validateNetworkSpec(id string, spec *sonm.NetworkSpec) error {  
+	if len(spec.GetType()) == 0 {  
+		return errors.New("network type is required in network spec")  
+	}  
+	return nil  
+}  
+```  
+* Checks that the embedded `sonm.NetworkSpec` contains a non‑empty type.    
+* Returns an error if validation fails; otherwise returns `nil`.  
   
-### `NewNetworkSpec` Function  
+### 3. Constructor – `NewNetworkSpec`  
+```go  
+func NewNetworkSpec(spec *sonm.NetworkSpec) (*NetworkSpec, error) {  
+	id := strings.Replace(uuid.New(), "-", "", -1)  
+	err := validateNetworkSpec(id, spec)  
+	if err != nil {  
+		return nil, err  
+	}  
+	return &NetworkSpec{spec, id}, nil  
+}  
+```  
+* Generates a UUID string (removing hyphens), validates the supplied `sonm.NetworkSpec`, and returns a new `structs.NetworkSpec` instance with the generated ID.  
   
-Creates a new `NetworkSpec` instance from a `sonm.NetworkSpec`. It generates a UUID (without hyphens) and validates the input spec using `validateNetworkSpec`. Returns the new `NetworkSpec` or an error if validation fails.  
+### 4. Batch Constructor – `NewNetworkSpecs`  
+```go  
+func NewNetworkSpecs(specs []*sonm.NetworkSpec) ([]*NetworkSpec, error) {  
+	result := make([]*NetworkSpec, 0, len(specs))  
+	for _, s := range specs {  
+		spec, err := NewNetworkSpec(s)  
+		if err != nil {  
+			return nil, err  
+		}  
+		result = append(result, spec)  
+	}  
+	return result, nil  
+}  
+```  
+* Accepts a slice of `sonm.NetworkSpec` pointers and converts each into the local `structs.NetworkSpec`.    
+* Returns a slice of pointers to the newly created specs or an error if any conversion fails.  
   
-### `NewNetworkSpecs` Function  
+---  
   
-Creates a slice of `NetworkSpec` instances from a slice of `sonm.NetworkSpec` instances. It iterates through the input slice, creating each `NetworkSpec` using `NewNetworkSpec`. Returns the resulting slice or an error if any individual creation fails.  
+**<end_of_output>**  
   

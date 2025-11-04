@@ -1,28 +1,78 @@
 # cmd/relay/main.go  
-**Package Name:** `main`  
+**Package / Component**  
   
-**Imports:**  
-- `context`: For managing context and cancellation signals.  
-- `fmt`: For formatted I/O, primarily error formatting.  
-- `github.com/noxiouz/zapctx/ctxlog`:  For structured logging within contexts.  
-- `github.com/sonm-io/core/cmd`: Provides command execution framework (likely for application lifecycle management).  
-- `github.com/sonm-io/core/insonmnia/logging`: For building logger instances.  
-- `github.com/sonm-io/core/insonmnia/npp/relay`: Core relay server functionality.  
-- `golang.org/x/sync/errgroup`:  For managing concurrent goroutines and handling errors.  
-  
-**External Data / Input Sources:**  
-- **Configuration File:** The code loads a configuration file using `relay.NewServerConfig(app.ConfigPath)`. The path to this config is provided via the application context (`app.ConfigPath`). This file likely contains settings for logging, server behavior, and other operational parameters.  
-  
-**TODOs:**  
-There are no explicit TODO comments in the code. However, there's a comment block explaining how the `errgroup` handles shutdown scenarios (user interrupt vs. unexpected stop).  This could be considered an implicit area for future refinement or monitoring improvements.  
+- **Name:** `main`    
+  The file defines the entry point for a Relay‑based server application.  
   
 ---  
   
-### Code Summary:  
+## Imports  
   
-The provided file implements the main entry point and server startup logic for a relay service within the SONM core infrastructure. The primary function, `start`, initializes the relay server based on configuration loaded from a specified path (`app.ConfigPath`). It sets up structured logging using `zapctx` and utilizes an `errgroup` to manage concurrent execution of the server's serving loop and interruption handling.  
+| Package | Alias |  
+|---------|-------|  
+| `context` | – |  
+| `fmt` | – |  
+| `github.com/noxiouz/zapctx/ctxlog` | `log` |  
+| `github.com/sonm-io/core/cmd` | – |  
+| `github.com/sonm-io/core/insonmnia/logging` | – |  
+| `github.com/sonm-io/core/insonmnia/npp/relay` | – |  
+| `golang.org/x/sync/errgroup` | – |  
   
-The `main` function simply calls `cmd.NewCmd(start).Execute()`, indicating that this file is designed to be run as a command-line application managed by the SONM core's command framework. The error handling throughout focuses on wrapping errors with descriptive messages before returning them, ensuring clear diagnostics in case of failure during startup or operation.  
+---  
   
-The use of `errgroup` suggests an intention for graceful shutdown: either through explicit user interruption (handled via `cmd.WaitInterrupted`) or due to internal server failures.  Logging is used to indicate when the relay server stops, including any errors that caused it to terminate. The code relies heavily on external configuration and logging components from other parts of the SONM core package structure.  
+## External Data / Input Sources  
+  
+| Source | Description |  
+|--------|-------------|  
+| `app.ConfigPath` | Path to the configuration file for the Relay server. |  
+| `cfg.Logging` | Logging configuration used by `logging.BuildLogger`. |  
+| `*cfg` (dereferenced) | Full configuration passed to `relay.NewServer`. |  
+  
+---  
+  
+## TODOs  
+  
+No explicit `TODO:` comments are present in this file, but future improvements could include:  
+  
+- Adding error handling for the logger build step.  
+- Expanding context cancellation logic.  
+  
+---  
+  
+## Code Summary  
+  
+### `start(app cmd.AppContext) error`  
+  
+1. **Configuration Loading**    
+   - Calls `relay.NewServerConfig` with the path from the application context to obtain a configuration struct (`cfg`). Errors are wrapped and returned if loading fails.  
+  
+2. **Logger Construction**    
+   - Builds a logger instance using `logging.BuildLogger(cfg.Logging)`; any error is reported similarly.  
+  
+3. **Context Preparation**    
+   - Wraps a background context with the created logger via `log.WithLogger`.    
+   - Creates an options slice for the Relay server, currently containing only a logger option (`relay.WithLogger(log.G(ctx))`).  
+  
+4. **Server Instantiation**    
+   - Constructs a new Relay server instance with `relay.NewServer(*cfg, options...)`. Errors are propagated.  
+  
+5. **Concurrent Execution**    
+   - Uses `errgroup.WithContext` to obtain a wait group and an extended context (`wg`, `ctx`).    
+   - Launches two goroutines:    
+     * `server.Serve(ctx)` – runs the server loop.    
+     * `cmd.WaitInterrupted(ctx)` – blocks until an interrupt signal is received, then signals shutdown.    
+  
+6. **Error Reporting**    
+   - Waits for both goroutines to finish; logs a message if any error occurs.  
+  
+7. **Return**    
+   - Returns `nil` on success (errors are already handled earlier).  
+  
+### `main()`  
+  
+- Entry point that creates a new command (`cmd.NewCmd(start)`) and executes it. This ties the `start` function into the application’s CLI handling logic.  
+  
+---  
+  
+The file orchestrates configuration loading, logger setup, server creation, and concurrent execution of the Relay server with graceful shutdown handling.  
   

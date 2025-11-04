@@ -1,120 +1,220 @@
 # util/xdocker/reference.go  
-### `xdocker` Package Summary  
-  
-**Package Name:** `xdocker`  
-  
-**Imports:**  
-  
-*   `github.com/docker/distribution/reference`: Used for parsing and manipulating Docker image references.  
-*   `github.com/opencontainers/go-digest`:  Used for handling SHA256 digests of images.  
-*   `github.com/pkg/errors`: For error wrapping and creation.  
-  
-**External Data / Input Sources:**  
-  
-The code primarily operates on string inputs representing Docker image references (e.g., `image:tag`, `image@sha256:digest`). These strings are parsed using the `docker/distribution` library to extract name, tag, and digest information. The input can also be byte slices for unmarshaling text-based reference representations.  
-  
-**TODOs:** None found in this file.  
+**Package / Component**    
+`xdocker`  
   
 ---  
   
-### Code Summary by Section  
+### Imports    
+```go  
+import (  
+	"github.com/docker/distribution/reference"  
+	"github.com/opencontainers/go-digest"  
+	"github.com/pkg/errors"  
+)  
+```  
+* `reference` – Docker distribution reference handling (parsing, tagging, digesting).    
+* `digest` – OpenContainers digest type.    
+* `errors` – Error handling for the package.  
   
-**1. Reference Type Definition & Creation (`Reference`, `NewReference`)**  
+---  
   
-The code defines a custom `Reference` type that wraps the `github.com/docker/distribution/reference.Reference`. The `NewReference` function attempts to parse an input string into a valid reference using `ParseAnyReference`.  Error handling is present for invalid inputs. This provides a wrapper around Docker's reference parsing logic, potentially allowing custom behavior or validation in future implementations.  
+### External data / input sources    
+The code works with a string representation of a Docker image reference (`source`).    
+All methods ultimately rely on the underlying `reference.Reference` interface from the Docker distribution library, which can be parsed, marshalled/unmarshalled, and extended with tags or digests.  
   
-**2. Parsing & Unmarshaling (`Parse`, `UnmarshalText`)**  
+---  
   
-The `Parse` method directly uses the underlying `reference.ParseAnyReference` function to parse strings into references and stores them within the struct. The `UnmarshalText` method simply calls `Parse` with a string converted from byte slice input, enabling text-based unmarshaling of reference values.  
+### TODOs    
+No explicit TODO comments are present in this file.  
   
-**3. Marshaling (`MarshalText`)**  
+---  
   
-The `MarshalText` method converts the internal reference to its string representation using `.String()` and returns it as a byte slice. This allows for easy serialization of references into strings.  
+## Summary of major code parts  
   
-**4. Reference Type Assertions & Accessors (`Named`, `HasDigest`, `Digest`, `HasName`, `Name`)**  
+| Section | Purpose | Key points |  
+|---------|---------|------------|  
+| **Type definition** | `Reference` struct wraps a Docker reference. | Embeds `reference.Reference`; allows direct access to all methods of the underlying interface. |  
+| **NewReference** | Factory that creates a `Reference` from a string source. | Calls `Parse`, returns an error if parsing fails. |  
+| **Parse** | Parses any reference string into the embedded `reference.Reference`. | Uses `reference.ParseAnyReference`; assigns to the struct field. |  
+| **UnmarshalText / MarshalText** | Implements text marshaling for the type. | `UnmarshalText` delegates to `Parse`; `MarshalText` returns the string representation as bytes. |  
+| **Named** | Retrieves the underlying named reference if available. | Type‑asserts to `reference.Named`, returning nil when not applicable. |  
+| **WithTag** | Adds a tag to the current reference and returns a new `Reference`. | Uses `reference.TrimNamed` and `reference.WithTag`; error handling included. |  
+| **HasDigest / Digest** | Checks for digest presence and retrieves it. | `HasDigest` checks interface assertion; `Digest` returns the digest value or empty string if not present. |  
+| **WithDigest** | Adds a digest to the reference, returning a new `Reference`. | Similar pattern to `WithTag`; uses `reference.WithDigest`. |  
+| **HasName / Name** | Checks for and retrieves the name part of the reference. | Uses interface assertion to `reference.Named` and returns the name string. |  
   
-These methods provide type assertions to check if the underlying reference implements specific interfaces (e.g., `reference.Named`, `reference.Digested`). They then extract relevant information like name, digest, or tag if available.  The code handles cases where the assertion fails by returning default values (empty strings/digests) instead of panicking.  
+---  
   
-**5. Tag & Digest Manipulation (`WithTag`, `WithDigest`)**  
-  
-`WithTag` and `WithDigest` allow modifying existing references by adding a tag or digest, respectively. They first check if the reference is named before applying the modification using functions from the underlying `docker/distribution` library. Error handling ensures that operations are only performed on valid named references. The methods return new `Reference` instances with the updated values.  
+All methods are straightforward wrappers around the Docker distribution library, providing a convenient API for creating, inspecting, and extending Docker image references within the `xdocker` package.  
   
 # util/xdocker/reference_test.go  
-## xdocker Package Component Summary  
+# xdocker Package – Reference Marshal/Unmarshal Test  
   
-**Package Name:** `xdocker`  
+## Imports  
+```go  
+import (  
+	"encoding/json"  
+	"testing"  
   
-**Imports:**  
+	"github.com/stretchr/testify/require"  
+)  
+```  
+* `encoding/json` – standard library for JSON marshaling/unmarshaling.  
+* `testing` – Go testing framework used to run the unit test.  
+* `github.com/stretchr/testify/require` – assertion helpers from Testify.  
   
-*   `encoding/json`: For JSON serialization and deserialization.  
-*   `testing`: For unit testing functionality.  
-*   `github.com/stretchr/testify/require`: Assertion library for tests.  
+## External Data / Input Sources  
+| Variable | Value | Purpose |  
+|----------|-------|---------|  
+| `refStr` | `"httpd:latest"` | Initial reference string passed to `NewReference`. |  
+| `data`   | JSON bytes of a `Reference` instance | Result of marshaling the reference. |  
   
-**External Data / Input Sources:**  
+The test also uses the output of `json.Unmarshal` into a new `Reference` pointer (`ref2`) and compares its string representation.  
   
-*   The test case uses a hardcoded string `"httpd:latest"` as input to create a `Reference`.  
-*   JSON data is marshaled from and unmarshaled to the `Reference` struct.  
+## TODOs  
+No explicit TODO comments are present in this file; all functionality is exercised by the single test function.  
   
-**TODOs:** None found in this file.  
+## Summary of Major Code Parts  
   
----  
+### Test Function: `TestReferenceMarshalUnmarshal`  
+* **Purpose** – Verify that a `Reference` can be created from a string, marshaled to JSON, and unmarshaled back while preserving its canonical form.  
+* **Steps**  
+  1. Create a reference from the literal `"httpd:latest"` using `NewReference`.  
+  2. Assert no error occurs during creation (`require.NoError(t, err)`).  
+  3. Marshal the reference into JSON bytes; assert success and that the resulting string equals `"docker.io/library/httpd:latest"`.  
+  4. Unmarshal those bytes back into a new `Reference` pointer.  
+  5. Assert no error on unmarshaling and that the string representation of the new reference matches the expected canonical form.  
   
-### Test Function Summary (`TestReferenceMarshalUnmarshal`)  
-  
-This test function verifies that the `NewReference` function correctly parses an image reference string (e.g., `"httpd:latest"`) and creates a valid `Reference` object. It then checks if the `Reference` can be marshaled to JSON, and unmarshaled back into another `Reference` without errors, ensuring data integrity during serialization/deserialization. The assertion verifies that the resulting string representation of the unmarshalled reference matches the original input.  
+The test confirms both the correctness of the `NewReference` constructor and the JSON (un)marshaling logic for the `Reference` type, ensuring round‑trip fidelity.  
   
 # util/xdocker/xdocker.go  
-**Package Name:** `xdocker`  
-  
-**Imports:**  
-- `bufio`: For buffered input/output operations, specifically reading line by line from an io.Reader.  
-- `bytes`: To create a reader from byte slices for JSON decoding.  
-- `encoding/json`: For encoding and decoding JSON data.  
-- `fmt`: For formatted I/O (printing errors).  
-- `io`: Provides basic interfaces for input/output operations.  
-  
-**External Data / Input Sources:**  
-- The function `DecodeImagePull` takes an `io.Reader` as input, which represents the stream of data from Docker's image pulling process. This could be a standard input, file, network connection or any other source that implements the io.Reader interface.   
-  
-**TODO Comments:** None found in this code snippet.  
+**Package / Component Name**    
+`xdocker`  
   
 ---  
-### Function: DecodeImagePull  
-This function decodes JSON-encoded responses from Docker during an image pull operation. It reads line by line from the provided `io.Reader` and attempts to parse each line as a JSON object representing either success or error status. The function handles potentially malformed or mixed replies (e.g., multiple JSON objects on one line) by iterating through decoding until an error is encountered, specifically looking for non-empty "Error" fields in the decoded responses.  
   
-### Function: decodePullLine  
-This helper function decodes a single line of JSON data from Docker's output. It uses `json.NewDecoder` to parse the byte slice into a `spoolResponseProtocol` struct. If an error is encountered during decoding, it checks for `io.EOF` (end of file) and returns nil if reached; otherwise, it returns the decoding error. The function also checks for non-empty "Error" fields in the decoded response and returns an error message if found.  
+### Imports  
+```go  
+import (  
+	"bufio"  
+	"bytes"  
+	"encoding/json"  
+	"fmt"  
+	"io"  
+)  
+```  
+* `bufio`: buffered I/O reader for reading from an `io.Reader`.  
+* `bytes`: byte slice utilities, used to create a new reader.  
+* `encoding/json`: JSON decoding of Docker responses.  
+* `fmt`: formatting and error handling.  
+* `io`: generic I/O interface.  
+  
+---  
+  
+#### External Data / Input Sources  
+| Function | Input Source | Description |  
+|----------|--------------|-------------|  
+| `DecodeImagePull` | `io.Reader` (e.g., a network connection or file) | Reads Docker pull responses line‑by‑line and decodes each JSON object. |  
+  
+---  
+  
+#### TODO Comments  
+No explicit `TODO:` comments are present in the current code.  
+  
+---  
+  
+## Summary of Major Code Parts  
+  
+#### 1. `spoolResponseProtocol`  
+```go  
+type spoolResponseProtocol struct {  
+	Error  string `json:"error"`  
+	Status string `json:"status"`  
+}  
+```  
+*Defines the structure expected from Docker’s pull response: an error message and a status field, both decoded from JSON.*  
+  
+#### 2. `DecodeImagePull`  
+```go  
+func DecodeImagePull(r io.Reader) error { … }  
+```  
+*Creates a buffered reader (`bufio.NewReader`) to read the incoming stream line by line until EOF or an empty line is encountered.*  
+* For each line:  
+  * Trims the trailing newline.  
+  * Calls `decodePullLine` to parse the JSON into a `spoolResponseProtocol`.  
+* Returns any error that occurs during reading or decoding.  
+  
+#### 3. `decodePullLine`  
+```go  
+func decodePullLine(line []byte) error { … }  
+```  
+*Wraps the line bytes in a `bytes.Reader`, then uses `json.NewDecoder` to unmarshal into a `spoolResponseProtocol`.*  
+* The loop inside this function appears intended to handle multiple JSON objects per line, but currently it only processes one and returns on success.*  
+  
+---  
+  
+**<end_of_output>**  
   
 # util/xdocker/xdocker_test.go  
-## xdocker Package Component Summary  
-  
-**Package Name:** `xdocker`  
-  
-**Imports:**  
-  
-*   `bytes`: For creating byte readers from slices.  
-*   `context`: For managing request contexts.  
-*   `fmt`: For formatted I/O, including error creation.  
-*   `log`: For logging errors (used in testing).  
-*   `testing`: For writing unit tests.  
-*   `github.com/docker/docker/api/types`: Docker API types for image pull options.  
-*   `github.com/docker/docker/client`: Docker client library for interacting with the Docker daemon.  
-*   `github.com/stretchr/testify/assert`: Assertion library for testing.  
-  
-**External Data / Input Sources:**  
-  
-*   Test fixtures (byte slices) representing mock responses from image pull operations. These are used to test `DecodeImagePull`.  
-*   Docker daemon: The tests interact with a running Docker daemon via the client library (`client.NewEnvClient()`).  The `ImagePull` function pulls an image ("alpine:latest") from the docker registry.  
-  
-**TODOs:** None found in this file.  
+**Package / Component**    
+`xdocker`  
   
 ---  
   
-### Test Cases for `DecodeImagePull` Function  
+### Imports  
+```go  
+import (  
+	"bytes"  
+	"context"  
+	"fmt"  
+	"log"  
+	"testing"  
   
-This section contains unit tests that verify the behavior of the `DecodeImagePull` function with various mock responses (fixtures). The tests cover cases where the response is well-formed, malformed, or includes errors.  The primary goal is to ensure correct error handling and parsing logic within `DecodeImagePull`.  
+	"github.com/docker/docker/api/types"  
+	"github.com/docker/docker/client"  
+	"github.com/stretchr/testify/assert"  
+)  
+```  
+The file pulls in the standard library packages for I/O, context handling and testing, plus Docker client types and a test assertion helper.  
   
-### Integration Test for `ImagePull` Function  
+---  
   
-This section performs an actual image pull operation using a Docker client (`client.NewEnvClient()`). It pulls the "alpine:latest" image from the registry, then pipes the response stream into the `DecodeImagePull` function to verify that it can handle real-world responses correctly. The test includes error handling and resource cleanup (deferring `rd.Close()`).  
+### External Data / Input Sources  
+* **Fixtures** – an inline slice of anonymous structs that provide:  
+  * `name` – a descriptive label for each case.  
+  * `body` – raw JSON payloads to be fed into the decoder.  
+  * `err` – expected error value (currently all are `nil`, except two cases that expect a non‑nil error).  
+* **Docker client** – created via `client.NewEnvClient()` and used in `TestImagePull`.  
+  
+---  
+  
+### TODO Comments  
+No explicit `TODO:` markers were found in the file.    
+(If future work is needed, add a section for pending tasks.)  
+  
+---  
+  
+## Summary of Major Code Parts  
+  
+#### 1. Test Fixture Construction (`TestImagePullFromMock`)  
+* Builds eight distinct test cases covering:  
+  * Single line JSON.  
+  * Multiple lines with and without trailing newline.  
+  * Flat concatenated JSON.  
+  * Mixed combinations of the above.  
+* Each case is executed in a loop that calls `DecodeImagePull` on a `bytes.Reader` created from the fixture body, then verifies the returned error matches the expected value.  
+  
+#### 2. Docker Image Pull Test (`TestImagePull`)  
+* Instantiates a Docker client with environment defaults.  
+* Calls `dockclient.ImagePull` to pull an image named `"alpine:latest"` using empty options.  
+* Defers closing of the returned reader and immediately decodes it via `DecodeImagePull`.  
+* Errors are surfaced through the test harness (`t.Fatal`) if any step fails.  
+  
+#### 3. Common Functionality  
+Both tests rely on a shared helper, `DecodeImagePull`, which is assumed to exist elsewhere in the package.    
+The first test validates that this decoder correctly interprets various JSON payload shapes; the second verifies it works against an actual Docker pull stream.  
+  
+---  
+  
+**End of output**  
   
