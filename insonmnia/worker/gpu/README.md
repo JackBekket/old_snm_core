@@ -1,59 +1,113 @@
-## GPU Package Summary
+# Package `gpu`
 
-**Package Name:** `gpu`
+The **`gpu`** package implements a small GPU‑management subsystem that discovers AMD/RADEON and NVIDIA devices on the host, exposes them to Docker containers, and provides a gRPC service for remote tuning.  
+At its core are three tuners (`fake`, `radeon`, `nvidia`) that all satisfy the same `Tuner` interface; each tuner knows how to discover devices, expose metrics, and bind them into a container.
 
-This package manages GPU resources for containerized workloads, primarily focusing on NVIDIA and Radeon GPUs. It provides a vendor-agnostic interface for attaching GPUs to Docker containers, collecting metrics, and handling volume mounts. The package supports remote GPU tuners via gRPC, allowing for centralized GPU management.
+---
 
-**Configuration:**
+## Short summary of provided files
 
-*   **Environment Variables:** None explicitly defined in the provided code, but the `options.go` file suggests configuration via environment variables or external configuration files through `mapstructure.WeakDecode`.
-*   **Flags/Cmdline Arguments:** Not directly present in the code, but the `remote_tuner.go` file implies a configurable `RemoteSocket` for gRPC communication.
-*   **Files/Paths:**
-    *   `/sys/dev/char/<major>:<minor>/device/drm/`: Used for DRI card detection.
-    *   `/sys/class/drm/<card.Name>/device/vendor`: Reads GPU vendor ID.
-    *   `/sys/class/drm/<card.Name>/device/uevent`: Reads PCI bus ID.
-    *   `/dev/dri/`: Lists available DRI cards.
-    *   `/sys/kernel/debug/dri/<card.Num>/amdgpu_pm_info`: Reads AMD GPU power consumption.
-    *   Volume mount paths (configurable via `tunerOptions` in `options.go`).
-*   **Edge Cases:**
-    *   The `dri_windows.go` file returns an error on Windows, indicating no GPU support.
-    *   The `tuner_other.go` file returns a `NilTuner` when GPU support is disabled via build tags (`!cl darwin`).
-    *   Remote tuner functionality relies on a functional gRPC endpoint (`RemoteSocket`).
+| Path | Purpose |
+|------|---------|
+| `detect.go` | Helper functions for vendor lookup (`hasGPUWithVendor`, `GetVendorByName`). |
+| `dri.go` | AMD‑specific device discovery (DRICard struct, constructor, metrics). |
+| `dri_test.go` | Unit tests for the DRI regex and parsing helpers. |
+| `dri_unix.go` / `dri_windows.go` | OS‑specific helper to read major/minor numbers from a sysfs path. |
+| `fake_tuner.go` | Very small “dummy” tuner that creates fake devices (used as a fallback). |
+| `interface.go` | Public API: `Tuner`, `MetricsHandler`, factory functions, and the nil‑stub implementation. |
+| `metrics.go` / `metrics_other.go` | Concrete metric handlers for NVIDIA and Radeon; the latter is currently a stub that returns a `nilMetricsHandler`. |
+| `nvidia_tuner.go` | Full NVIDIA tuner: discovers devices via OpenCL/NVML, builds a device map, logs it, and exposes tuning logic. |
+| `options.go` | Configuration struct (`tunerOptions`) with functional options (`WithSocketDir`, `WithOptions`) and default constructors for each vendor. |
+| `radeon_tuner.go` | Full Radeon tuner: matches DRI cards to OpenCL devices, builds a device map, logs it, and exposes tuning logic. |
+| `remote_server.go` / `remote_tuner.go` | gRPC server that wraps a `Tuner`; the server implements `RemoteGPUTunerServer`. |
+| `tuner_other.go` | Darwin‑specific fallback tuners that simply return a `NilTuner`. |
+| `utils.go` | Helper to mount GPU devices into a Docker container (`newVolumeMount`, `tuneContainer`). |
+| `volume_plugin.go` | Implements a Docker volume driver for NVIDIA volumes; exposes CRUD operations and a simple path helper. |
 
-**Project Structure:**
+---
+
+## Environment variables, flags & command‑line arguments
+
+The package is configured through the following values:
+
+| Variable / Flag | Description | Default / Source |
+|-----------------|-------------|-------------------|
+| `tunerOptions.VolumeDriverName` | Name of the driver (e.g., `"nvidia"` or `"radeon"`). | Set by `nvidiaDefaultOptions()` / `radeonDefaultOptions()`. |
+| `tunerOptions.DriverVersion` | Driver version string. | Same as above. |
+| `tunerOptions.VolumePath` | Base path where GPU volumes are stored on the host. | Default from options file. |
+| `tunerOptions.DeviceCount` | Number of devices to create in a fake tuner. | Only used by `fake_tuner.go`. |
+| `tunerOptions.RemoteSocket` | Address of the remote gRPC server (used by `remote_tuner.go`). | Set by `remoteDefaultOptions()`. |
+| `tunerOptions.SocketPath` | Full Unix socket path for the gRPC service. | Built by `WithSocketDir()` using `path.Join`. |
+
+Command‑line arguments are implicit:  
+* The main entry point is a call to `New(ctx, vendorType, opts...)`, where `vendorType` is one of the enum values from `github.com/sonm-io/core/proto`.  
+* The tuner type can be chosen at runtime by passing an appropriate option function (e.g., `WithOptions(map[string]string{…})`).  
+
+---
+
+## File structure
 
 ```
-insonmnia/worker/gpu/
-├── detect.go
-├── dri.go
-├── dri_test.go
-├── dri_unix.go
-├── dri_windows.go
-├── fake_tuner.go
-├── interface.go
-├── metrics.go
-├── metrics_other.go
-├── nvidia_tuner.go
-├── options.go
-├── radeon_tuner.go
-├── remote_server.go
-├── remote_tuner.go
-├── tuner_other.go
-├── utils.go
-└── volume_plugin.go
+insonmnia/
+└─ worker/
+   └─ gpu/
+      ├─ detect.go
+      ├─ dri.go
+      ├─ dri_test.go
+      ├─ dri_unix.go
+      ├─ dri_windows.go
+      ├─ fake_tuner.go
+      ├─ interface.go
+      ├─ metrics.go
+      ├─ metrics_other.go
+      ├─ nvidia_tuner.go
+      ├─ options.go
+      ├─ radeon_tuner.go
+      ├─ remote_server.go
+      ├─ remote_tuner.go
+      ├─ tuner_other.go
+      ├─ utils.go
+      └─ volume_plugin.go
 ```
 
-**Relationships:**
+---
 
-*   `interface.go` defines the `Tuner` and `MetricsHandler` interfaces, which are implemented by vendor-specific tuners (`nvidia_tuner.go`, `radeon_tuner.go`, `fake_tuner.go`).
-*   `metrics.go` and `metrics_other.go` handle GPU metric collection, with `metrics.go` focusing on NVIDIA and Radeon, while `metrics_other.go` provides a no-op implementation.
-*   `volume_plugin.go` implements a Docker volume plugin for NVIDIA GPUs, relying on external volume management structures.
-*   `remote_tuner.go` and `remote_server.go` enable remote GPU tuning via gRPC.
-*   `utils.go` provides utility functions for container tuning, such as volume mount creation.
+## Relations between code entities
 
-**Unclear Places/Dead Code:**
+* **`New(ctx, vendorType, opts...)`** (in `interface.go`) dispatches to one of the concrete tuners (`fake`, `radeon`, `nvidia`).  
+  * The chosen tuner builds a device map (`map[GPUID]*sonm.GPUDevice`) that is later used by `tuneContainer()` in `utils.go`.  
+* **`DRICard`** (in `dri.go`) holds all low‑level information for an AMD card; its `Metrics()` method feeds into the Radeon metrics handler (`radeonMetrics`).  
+  * The helper `collectRelatedDevices()` reads `/sys/dev/char/.../drm/`; `collectDeviceVendorIDs()` pulls vendor/device IDs from `/sys/class/drm/<card>/device/*`.  
+* **`nvidiaMetrics`** (in `metrics.go`) wraps a slice of `nvidia.Device` objects; its `GetMetrics()` method aggregates temperature, fan speed and power into a map keyed by helper functions (`tempKey`, `fanKey`, `powerKey`).  
+  * The same pattern is used for Radeon metrics.  
+* **`remoteTunerService`** (in `remote_server.go`) holds a reference to the chosen tuner; its RPC method `Devices()` simply forwards to the tuner's `Devices()`.  
+  * The client side (`remote_tuner.go`) creates a gRPC connection, fetches devices, and exposes them via `Tune()`.
 
-*   The `tuneContainer` function is referenced but not defined in the provided snippets, suggesting it may be implemented elsewhere.
-*   The `collectDRICardsWithOpenCL` function in `radeon_tuner.go` is called but not defined, indicating missing implementation details.
-*   The `Close` method in `radeon_tuner.go` is a no-op, potentially indicating incomplete functionality.
-*   The `Unmount` method in `volume_plugin.go` simply returns an error, suggesting it may not be fully implemented.
+---
+
+## Edge cases for launching
+
+1. **Local tuning** – Run `go run ./...` in the repository root; the main package will call `New(ctx, vendorType)` with default options (e.g., `nvidiaDefaultOptions()`).  
+2. **Remote tuning** – Start the gRPC server by executing `remote_server.go`; it expects a running tuner instance and will expose a `RemoteGPUTunerServer`.  
+3. **OS‑specific build tags** – The file `dri_unix.go` is compiled on non‑Windows platforms; `dri_windows.go` provides the Windows counterpart.  
+4. **Darwin fallback** – If building for macOS without the `cl` tag, `tuner_other.go` supplies a minimal tuner that returns a `NilTuner`.  
+
+---
+
+## Unclear places / possible dead code
+
+* The stub implementations in `metrics_other.go` and `tuner_other.go` currently return a `nilMetricsHandler`; if not overridden elsewhere they may be dead code.  
+* In `options.go`, the field `libsMountPoint` is defined but never used; it might be intended for future volume mounting logic.  
+
+---
+
+## Summary of the whole package
+
+The **gpu** package provides:
+
+1. **Discovery** – AMD cards via DRI sysfs, NVIDIA devices via OpenCL/NVML.  
+2. **Metrics collection** – per‑vendor handlers that expose fan speed, temperature and power.  
+3. **Container binding** – `tuneContainer()` adds device mappings and volume mounts to a Docker host config.  
+4. **Remote service** – a gRPC server that exposes the tuner’s devices for external consumption.  
+
+All pieces are wired together through the public API in `interface.go`, making it easy to plug in new tuners or metrics handlers without touching the rest of the code base.

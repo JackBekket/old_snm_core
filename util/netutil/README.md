@@ -1,15 +1,9 @@
-```markdown
-# netutil
+# `<netutil>` – Network utilities package
 
-## Summary
+## Overview  
+`netutil` is a small Go library that simplifies working with network addresses, especially when parsing host‑port strings, resolving them to `net.TCPAddr`, and sorting IPs for display or further processing.
 
-The `netutil` package provides utility functions for network address manipulation, parsing, validation, and sorting. It includes functionality to extract host/port from strings, unmarshal TCP addresses from YAML, retrieve public IP addresses, check if an IP is private, resolve host:port combinations, and sort IP lists with prioritization of public IPs.
-
-## Configuration & Arguments
-
-The package relies on system network interfaces for retrieving available IPs. No explicit configuration files or command-line arguments are present in the provided code snippets. The behavior can be influenced by the underlying operating system's networking setup.
-
-## Package Structure
+The package contains two source files:
 
 ```
 util/netutil/
@@ -17,21 +11,62 @@ util/netutil/
 └── net_test.go
 ```
 
-## Core Components & Relations
+### Key features  
+| Feature | What it does |
+|---------|--------------|
+| **Host‑port parsing** | `SplitHostPort`, `ExtractHost`, `ExtractPort` – split a string like `"::1:80"` into an IP and a port. |
+| **YAML support** | `TCPAddr.UnmarshalYAML` – unmarshals a YAML string into a `net.TCPAddr`. |
+| **IP discovery** | `GetAvailableIPs`, `GetPublicIPs` – collect all global unicast IPs from system interfaces, filter for public ones. |
+| **Private‑IP detection** | `isPrivateIPv4`, `isPrivateIPv6`, `IsPrivateIP` – helpers that test whether an address is private (IPv4 or IPv6). |
+| **TCP lookup** | `LookupTCPHostPort` – resolves a host‑port pair to a slice of `net.Addr`. |
+| **Sorting** | `SortedIPs`, `sortableIPs` – convert string IPs into sorted strings, ordering IPv6 before IPv4. |
 
-*   **`SplitHostPort`, `ExtractHost`, `ExtractPort`**: These functions parse host:port strings, similar to the standard library but with IPv6 bracket handling. They are foundational for other operations that require separating address components.
-*   **`TCPAddr`**: A custom type enabling YAML unmarshalling of TCP addresses. This suggests integration with configuration systems using YAML format.
-*   **`GetPublicIPs`, `GetAvailableIPs`, `IsPrivateIP`**: These functions work together to identify usable public IP addresses from network interfaces, filtering out private or invalid entries.  The `IsPrivateIP` function relies on hardcoded IPv4/IPv6 ranges for detection.
-*   **`LookupTCPHostPort`**: Resolves host:port strings into a slice of `net.Addr`, using DNS lookup via `net.LookupHost`. This is useful for connecting to remote services by hostname.
-*   **`SortedIPs`**: Sorts IP addresses, prioritizing public IPs (IPv6 before IPv4) over private ones. The sorting logic might be crucial in scenarios where specific address order matters (e.g., load balancing).
+---
 
-## Edge Cases & Launching
+## Environment variables / flags / command‑line arguments  
+The package itself does not expose any build tags or command‑line flags; it is intended to be imported by other code. However, the following are useful when using this library:
 
-The package is a utility library and doesn't have a direct entry point for launching as an application. It's intended to be imported into other Go programs that require network-related functionality. The behavior depends on how the functions are called within those applications. No specific edge cases related to command-line arguments or startup flags exist, since it is not executable.
+| Variable | Purpose |
+|----------|---------|
+| `netutil.HostPort` | A string like `"::1:80"` that can be passed to `SplitHostPort`. |
+| `netutil.IPList` | Slice of IP strings used by `SortedIPs`. |
 
-## Unclear Places & Dead Code
+---
 
-The provided code snippets do not reveal any obvious dead code or unclear places. However, without seeing the full implementation of `isPrivateIPv4` and `isPrivateIPv6`, their exact behavior cannot be fully determined. The test cases in `net_test.go` suggest that these functions are well-tested but their internal logic remains hidden.
+## How the code pieces relate  
 
-<end_of_output>
+* **Parsing** – `SplitHostPort` calls `net.ParseIP` and `strconv.Atoi` internally; it returns a `net.IP` and a custom type `Port uint16`.  
+* **YAML unmarshalling** – `TCPAddr.UnmarshalYAML` uses the same parsing logic to populate its embedded `net.TCPAddr`.  
+* **Discovery & filtering** – `GetAvailableIPs` walks all interfaces (`net.Interfaces()`), collects IPs, and feeds them into `GetPublicIPs`, which filters by `IsPrivateIP`.  
+* **Lookup** – `LookupTCPHostPort` uses the parsed host‑port to perform a DNS lookup (`net.LookupTCPAddr`) for each interface.  
+* **Sorting** – `SortedIPs` converts string IPs to `net.IP`, sorts them with `sortableIPs`, and returns a slice of strings again.
+
+---
+
+## Edge cases & launch scenarios  
+
+1. **Multiple interfaces** – If the host has several network interfaces, `GetAvailableIPs` will return all global unicast addresses; `LookupTCPHostPort` will produce one `net.Addr` per interface.  
+2. **IPv4 vs IPv6 ordering** – The custom sorter places IPv6 addresses before IPv4 ones (`Less` compares family first).  
+3. **CLI usage** – If a main package imports `util/netutil`, it can call e.g.:
+
+```go
+ips := netutil.GetPublicIPs()
+fmt.Println(netutil.SortedIPs(ips))
 ```
+
+No special flags are required; the library is pure Go.
+
+---
+
+## File list (project structure)
+
+```
+util/
+└─ netutil/
+   ├─ net.go          // core implementation
+   └─ net_test.go     // unit tests for parsing, detection, sorting
+```
+
+---  
+
+**<end_of_output>**

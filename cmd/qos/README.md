@@ -1,64 +1,67 @@
-Okay, here's a markdown summary of the provided code, formatted as requested.
+# Package qos
 
-# Package Summary: `qos` (QoS Server)
+A lightweight command‑line entry point for a QOS (Quality of Service) service that wires together configuration loading, logging, GPU tuning and optional PTY handling over a Unix socket.
 
-**Package Name:** `qos` (inferred from directory structure)
+---
 
-**Purpose:** This package implements a Quality of Service (QoS) server with remote GPU tuning, system initialization, and secure shell (PTY) capabilities. It appears to be part of a larger system (likely related to distributed computing or resource management, given the `sonm-io/core` imports).
+## Quick Overview
+`cmd/qos/main.go` loads a YAML config file into a `Config` struct, builds a logger, starts a gRPC server on a Unix domain socket, registers three services (`remoteQOS`, `remoteTuner`, `remoteInit`) and optionally launches a PTY server if a secsh configuration is present. All heavy lifting is performed concurrently via an `errgroup.Group`.
 
-**File Structure:**
+---
+
+## Environment Variables / Flags / Cmd‑line Arguments
+
+| Variable / Flag | Description | Default |
+|------------------|-------------|---------|
+| `app.ConfigPath` | Path to the YAML config file that will be unmarshaled into `Config`. | – |
+| `cfg.Logging` | Logger configuration passed to `logging.BuildLogger`. | – |
+| `cfg.GPUVendor` | GPU vendor string used by `gpu.NewRemoteTuner`. | – |
+| `cfg.SysInit` | System‑initialization config for `sysinit.NewInitService`. | – |
+| `cfg.SecShell` | Optional secsh configuration; if present a PTY server is started. | – |
+| `cfg.Endpoint` | URI (default: `unix:///var/run/qos.sock`) used to create the network listener and expose services. | `unix:///var/run/qos.sock` |
+
+---
+
+## Project Package Structure
 
 ```
-cmd/qos/
-├── main.go
+cmd/
+└─ qos/
+   ├─ main.go
 ```
 
-**Configuration:**
+*(Only one source file is present in this snippet; additional files may exist elsewhere.)*
 
-*   **Configuration File:**  The primary configuration source is a YAML file loaded using `github.com/jinzhu/configor`. The path to this file is specified via the command-line argument `app.ConfigPath`.
-*   **Environment Variables:** No explicit environment variable usage is shown in the provided code snippet.
-*   **Command-Line Arguments:** The `app.ConfigPath` argument is used to specify the configuration file path.
-*   **Configuration Fields:**
-    *   `Endpoint`:  The address the server listens on (Unix socket or network address).
-    *   `GPUVendor`:  The GPU vendor to tune.
-    *   `SecShell.Eth.Keystore`: The directory containing Ethereum keystores for the secure shell server.
+---
 
-**Key Components & Logic:**
+## Edge Cases for Launching the Application
 
-1.  **Configuration Loading:** Loads configuration from YAML using `configor`.
-2.  **Logging:** Initializes structured logging using `go.uber.org/zap` and custom logging configuration.
-3.  **gRPC Server:** Sets up a gRPC server using `github.com/sonm-io/core/util/xgrpc`.
-4.  **Services:** Registers three gRPC services:
-    *   `QOSServer`: Handles QoS-related requests (likely resource allocation, prioritization).
-    *   `RemoteGPUTunerServer`: Provides remote GPU tuning functionality.
-    *   `InitServer`: Handles system initialization tasks.
-5.  **Secure Shell (PTY):** If configured, starts a secure shell server using `github.com/sonm-io/core/secsh`. Monitors a keystore directory for changes.
-6.  **Error Handling:** Uses `golang.org/x/sync/errgroup` for concurrent error handling.
-7.  **Socket Cleanup:** Attempts to delete the Unix socket file before listening (if a socket is used).
+| Scenario | How to Run |
+|----------|------------|
+| **Local development** | `go run ./cmd/qos` – starts the server on the default Unix socket. |
+| **Production build** | `go build -o bin/qos ./cmd/qos && ./bin/qos` – builds a binary and runs it. |
+| **Custom config path** | Pass an environment variable or flag that sets `app.ConfigPath`; e.g., `export APP_CONFIG_PATH=./config.yaml && go run ./cmd/qos`. |
+| **Different endpoint** | Override the default URI via `cfg.Endpoint` in the YAML file; the listener will bind to that address. |
 
-**Edge Cases/Launch Variations:**
+---
 
-*   **Unix Socket vs. Network Address:** The `Endpoint` configuration determines whether the server listens on a Unix socket or a network address.
-*   **Secure Shell Enabled/Disabled:** The `SecShell` configuration controls whether the secure shell server is started.
-*   **Configuration File Path:** The `app.ConfigPath` argument must be provided correctly for the server to load its configuration.
+## Code‑level Relations
 
-**Potential Issues/Unclear Areas:**
+1. **Configuration Loading** – `configor.Load(cfg, app.ConfigPath)` populates a local `Config` struct.  
+2. **Logger Creation** – `logging.BuildLogger(cfg.Logging)` produces a *zap* logger which is injected into the context via `ctxlog.WithLogger`.  
+3. **Service Instantiation** –  
+   - `remoteQOS := gpu.NewRemoteTuner(...)` creates a GPU‑tuning service.  
+   - `remoteInit := sysinit.NewInitService(cfg.SysInit)` prepares system‑initialization logic.  
+   - These services are registered on an *xgrpc* server (`xgrpc.NewServer`) and served in a dedicated goroutine.  
+4. **Network Listener** – The endpoint URI is parsed, any existing Unix socket at that path is unlinked, and `net.Listen` creates the listener.  
+5. **Optional PTY Server** – If `cfg.SecShell` exists, a PTY server (`secsh.NewRemotePTYServer`) watches the keystore directory for changes and runs concurrently in the same errgroup.
 
-*   The exact purpose of the `QOSServer`, `RemoteGPUTunerServer`, and `InitServer` services is unclear without further context.
-*   The interaction between the secure shell server and the keystore directory monitoring is not fully explained.
-*   The code assumes the existence of certain configuration fields (e.g., `Endpoint`, `GPUVendor`, `SecShell.Eth.Keystore`) without explicit validation.
+---
 
-**Dependencies:**
+## Observations & Potential Dead Code
 
-*   `github.com/jinzhu/configor`
-*   `github.com/sonm-io/core/cmd`
-*   `github.com/sonm-io/core/insonmnia/logging`
-*   `github.com/sonm-io/core/insonmnia/sysinit`
-*   `github.com/sonm-io/core/insonmnia/worker/gpu`
-*   `github.com/sonm-io/core/insonmnia/worker/network`
-*   `github.com/sonm-io/core/proto`
-*   `github.com/sonm-io/core/secsh`
-*   `github.com/sonm-io/core/util/xgrpc`
-*   `go.uber.org/zap`
-*   `golang.org/x/sync/errgroup`
-*   `golang.org/x/sys/unix`
+* The file references `golang.org/x/sync/errgroup` and `golang.org/x/sys/unix`; ensure these modules are vendored or available in the module graph.  
+* No explicit TODO comments were found, suggesting the implementation is complete.  
+* If any of the optional services (`remoteTuner`, `remoteInit`) fail to register, the errgroup will surface an error; consider adding more robust error handling if needed.
+
+---

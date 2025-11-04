@@ -1,31 +1,53 @@
-## Package: `multierror`
+# multierror
 
-This package provides utilities for handling multiple errors in Go, leveraging the `github.com/hashicorp/go-multierror` library. It offers both standard and thread-safe multi-error implementations.
+## Overview
+`util/multierror/error.go` implements a small wrapper around Hashicorp’s `go-multierror` package, adding convenient constructors and a thread‑safe append helper.  
+The file defines:
 
-**Project Package Structure:**
+| Entity | Purpose |
+|--------|---------|
+| `NewMultiError()` | Creates a new `multierror.Error` with a custom formatting function. |
+| `NewTSMultiError()` | Builds a thread‑safe wrapper (`TSMultiError`) around the error list. |
+| `Append(err error, errs ...error)` | Thin helper that forwards to `multierror.Append`. |
+| `AppendUnique(err *multierror.Error, other error)` | Adds an error only if it is not already present in the list. |
+| `errorFormat(errs []error) string` | Formats a slice of errors into a comma‑separated string used by `NewMultiError`. |
+| `TSMultiError` struct | Holds a mutex and an inner pointer to a `multierror.Error`. |
+| `(m *TSMultiError).Append(errs ...error)` | Thread‑safe append method. |
+| `(m *TSMultiError).ErrorOrNil()` | Returns the underlying error value. |
 
+The package imports only standard library packages (`strings`, `sync`) and the external dependency `github.com/hashicorp/go-multierror`.
+
+## Project structure
 ```
 util/
-└── multierror/
-    ├── error.go
+└─ multierror/
+   └─ error.go
 ```
 
-**Configuration:**
+## Configuration options
+* **Environment variables** – none defined in this file.  
+* **Flags / command‑line arguments** – none; the package is intended to be imported by other code.  
+* **Files & paths for configuration** – only `util/multierror/error.go` exists, so any configuration must come from the exported functions above.
 
-*   No explicit configuration options are present in the provided code. The behavior is determined by the underlying `github.com/hashicorp/go-multierror` package and the custom `errorFormat` function.
+## Edge cases for launching
+The file itself does not provide a CLI entry point, but it can be used in two ways:
 
-**Usage:**
+1. **Direct use**:  
+   ```go
+   err := multierror.NewMultiError()
+   err.Append(err1, err2)
+   ```
+2. **Thread‑safe wrapper**:  
+   ```go
+   tsErr := multierror.NewTSMultiError()
+   tsErr.Append(err1, err2, err3)
+   ```
 
-The package is designed to be used as a helper for aggregating errors, particularly in concurrent environments where thread safety is required. The `TSMultiError` type ensures that error appending is safe across multiple goroutines.
+Both patterns are thread‑safe; the `TSMultiError` type uses a mutex to guard concurrent appends.
 
-**Key Functions:**
+## Relations between code entities
+* `NewMultiError()` creates an instance of `multierror.Error`, setting its `ErrorFormat` field to the local `errorFormat` function.  
+* `AppendUnique()` iterates over the supplied errors, checks for duplicates by comparing their string representations, and forwards them to `multierror.Append`.  
+* The thread‑safe wrapper (`TSMultiError`) embeds a mutex and an inner pointer; its methods lock/unlock around calls to `multierror.Append`, ensuring safe concurrent access.  
 
-*   `NewMultiError()`: Creates a new multi-error instance.
-*   `NewTSMultiError()`: Creates a thread-safe multi-error instance.
-*   `Append()`: Appends an error to the multi-error.
-*   `AppendUnique()`: Appends an error only if it's not already present.
-*   `ErrorOrNil()`: Returns the underlying error or nil if empty.
-
-**Relations:**
-
-The `TSMultiError` type wraps the standard `multierror.Error` to provide thread safety. The `errorFormat` function customizes the error output format.
+No dead code or missing references are apparent in this file.
