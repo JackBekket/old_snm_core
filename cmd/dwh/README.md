@@ -1,29 +1,32 @@
-```markdown
-# main - Distributed Warehouse (DWH) Service Summary
+# Package: dwh
 
-This package implements a distributed warehouse (DWH) service with an L1 events processor, metrics exporter, and optional debug server. It's designed to process blockchain data and serve it through a DWH interface. The core functionality revolves around loading configuration, initializing logging, creating the DWH instance, starting the L1 event processing pipeline, serving metrics via Prometheus, and optionally enabling pprof debugging.
+This package implements a Data Warehouse (DWH) service with an L1 event processor, configured via a file and command-line arguments. It handles Ethereum key loading, concurrent execution of services, and optional debugging/metrics export.
 
 ## Project Package Structure:
 
-*   `main.go`: Main entry point for the application. Contains `run`, which orchestrates service initialization, execution, and shutdown.
+```
+cmd/dwh/
+├── main.go
+```
 
-## Configuration & Environment Variables:
+## Configuration:
 
-The application is configured through a configuration file loaded at runtime. Key configurable parameters include:
+*   **Environment Variables:** None explicitly mentioned, but `app.ConfigPath` suggests a configuration file path can be set via environment.
+*   **Command-Line Arguments:** Handled by `cmd.NewCmd(run).Execute()`, but specific arguments are not detailed.
+*   **Configuration File:** Loaded from `app.ConfigPath` using `dwh.NewDWHConfig`. Contains settings for logging, Ethereum, storage, blockchain, worker count, cold start, metrics, and debugging.
+*   **Private Key:** Loaded from the configuration using `cfg.Eth.LoadKey()`.
 
-*   **`app.ConfigPath`**: Path to the DWH configuration file (e.g., `/etc/dwh/config.yaml`).
-*   **`cfg.Eth.LoadKey`**: Private key for Ethereum operations, read from the config.
-*   **`cfg.MetricsListenAddr`**: Address where Prometheus metrics are exposed (e.g., `:9090`).
-*   **`cfg.Debug.EnablePprof`**: Boolean flag to enable pprof debugging server.
+## Edge Cases:
 
-## Launching & Edge Cases:
+*   The application can be launched via `cmd.NewCmd(run).Execute()`, but specific command-line flags are not defined.
+*   Configuration file errors will likely cause startup failures.
+*   Ethereum key loading failures will prevent service initialization.
 
-The application is launched via `go run main.go`. The primary edge case is the failure to load the configuration file or initialize logging, which results in immediate termination.  If the Ethereum private key cannot be loaded from the config, the service will fail to start. If metrics server fails to bind to the configured address, it won't expose any data.
+## Relations:
 
-## Code Logic Summary:
-
-The `run` function initializes a DWH service and an L1 event processor based on configuration parameters. It starts concurrent goroutines for signal handling, Prometheus metrics export, optional pprof debugging, and the core processing pipeline (L1 processor). The application shuts down gracefully upon receiving an interrupt signal or encountering an error in any of these goroutines.  The `errgroup` ensures that all resources are cleaned up before exiting.
-
-## Potential Issues:
-
-No explicit TODOs were found within the provided code snippet, but potential issues could arise from misconfigured blockchain settings, storage failures, or network connectivity problems during event processing.
+*   `main.go` orchestrates the entire process: configuration loading, service initialization, and concurrent execution.
+*   `dwh.NewDWH` creates the core DWH service, which likely interacts with storage and blockchain components.
+*   `dwh.NewL1Processor` handles L1 events, potentially interacting with the DWH service.
+*   `logging.BuildLogger` provides structured logging throughout the application.
+*   `metrics.NewPrometheusExporter` exports metrics for monitoring.
+*   `debug.ServePProf` enables debugging via PProf.
